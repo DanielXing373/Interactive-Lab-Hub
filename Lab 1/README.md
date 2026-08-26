@@ -3,8 +3,11 @@
 _This project is to be done in teams of 2._
 
 **NAME OF BOTH COLLABORATOR(S) HERE**
+Pablo Penalba & Daniel Xing
 
 **THE MASTERWORK YOU DREW FROM THE HAT:**
+The Light house
+Fresnel lens, 1820s
 
 ---
 
