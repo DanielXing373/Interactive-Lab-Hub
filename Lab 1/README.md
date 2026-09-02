@@ -1,5 +1,6 @@
 # Recreating the Masters of Interactive Light
-
+Check here for the documentation for part 1
+https://docs.google.com/document/d/1snRgKakF3mU9KJAw0au719QSUVCsPQ6IHMcXpvvNFzw/edit?tab=t.0
 _This project is to be done in teams of 2._
 
 **NAME OF BOTH COLLABORATOR(S) HERE**
