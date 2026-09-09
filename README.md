@@ -1,5 +1,9 @@
 # Pablo Penalba & Daniel Xing's Lab Hub
 
+**Link to Lab 1:** [Lab 1](https://github.com/IRL-CT/Interactive-Lab-Hub/tree/Fall2026/Lab%201)
+
+**Our topic:** Fresnel lens
+
 ## Part 0. Know Your Master
 
 Before you prototype anything, get intimately acquainted with the piece you drew. Do real research. You are looking less for trivia than for the shape of the interaction:
