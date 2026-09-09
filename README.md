@@ -123,7 +123,11 @@ Find three other groups. (How? Maybe Slack?) Visit their Lab Hub pages, watch th
 
 Who were the other groups you kibitzed with? Add links to their project pages here. Summarize the feedback you got from your partners here.
 
-Answer Pending
+Unfortunately, we were only able to complete this step with one group,  Aryan Palave's group. 
+
+We fell behind the peer-review window largely because of our own confusion. The numbering on Canvas did not line up clearly with one on GitHub, and we spent too long on part 1a. By the time we had our videos, we were no longer in step with the rest of the class. 
+
+We talked about how the lighting pattern is not conspicuous enough to see the transition we meant to demonstrate. We should add more contrast in that part. 
 
 **Remix, Update, or Critique the Master**
 
