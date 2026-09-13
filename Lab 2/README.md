@@ -158,6 +158,14 @@ You can look in `image.py` for an example of how to display an image on the scre
 
 \*\*\***Include a picture of your own Raspberry Pi displaying the piscreen.service with your unique MAC address. Additionally, please provide another picture showing the successful completion of the screen test.**\*\*\*
 
+piscreen.service (MAC: `88:a2:9e:c8:3f:de`):
+
+![piscreen.service with MAC](homepage.JPG)
+
+screen_test.py:
+
+![screen test](testscreen.JPG)
+
 
 ## Part D. 
 ### Set up the Display Clock Demo
