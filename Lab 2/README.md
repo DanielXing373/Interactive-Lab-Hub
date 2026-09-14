@@ -1,5 +1,5 @@
 # Interactive Prototyping: The Clock of Pi
-**NAMES OF COLLABORATORS HERE**
+**Collaborators:** none (individual submission)
 
 Does it feel like time is moving strangely during this semester?
 
@@ -8,7 +8,7 @@ For our first Pi project, we will pay homage to the [timekeeping devices of old]
 It is worth spending a little time thinking about how you mark time, and what would be useful in a clock of your own design.
 
 **Please indicate anyone you collaborated with on this Lab here.**
-Be generous in acknowledging their contributions! And also recognizing any other influences (e.g. from YouTube, Github, Twitter) that informed your design. 
+No classmates collaborated on this lab. I used **Cursor** to help format this README and to assist with the `screen_clock.py` script (filling in the Part D time display from `cli_clock.py` / `stats.py`). The Part E clock concept and sketches are my own. 
 
 ## Prep
 
@@ -201,6 +201,18 @@ We strongly discourage literal digital or analog clock display: Be creative.
 
 
 ** Insert ideas, sketches, [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf)), storyboards for your ideas **
+
+Part 2 idea: a Flappy Bird–style clock, not a literal digital or analog face.
+
+- **Idle:** the bird flies on its own. Score goes up by 1 point per second, so the score *is* the time.
+- **Play:** use the MiniPiTFT buttons to control the bird.
+- **Data on screen:** Score / Best score encode time; Trial encodes the date (e.g. `20260913`).
+
+Original sketch file (PDF): [implementation.pdf](implementation.pdf)
+
+The same sketch, shown below so it is visible on GitHub without opening the PDF:
+
+![Part E sketch](parte-sketch.png)
 
 
 
