@@ -204,13 +204,10 @@ We strongly discourage literal digital or analog clock display: Be creative.
 
 Part 2 idea: a Flappy Bird–style clock, not a literal digital or analog face.
 
-- **Idle:** the bird flies on its own. Score goes up by 1 point per second, so the score *is* the time.
-- **Play:** use the MiniPiTFT buttons to control the bird.
-- **Data on screen:** Score / Best score encode time; Trial encodes the date (e.g. `20260913`).
+- Idle: the bird flies on its own. Score goes up by 1 point per second, so the score is the time.
+- Play: use the MiniPiTFT buttons to control the bird.
+- Data on screen: Score / Best score encode time; Trial encodes the date (e.g. `20260913`).
 
-Original sketch file (PDF): [implementation.pdf](implementation.pdf)
-
-The same sketch, shown below so it is visible on GitHub without opening the PDF:
 
 ![Part E sketch](parte-sketch.png)
 
