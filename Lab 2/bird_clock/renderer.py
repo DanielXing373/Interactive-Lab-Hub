@@ -31,6 +31,7 @@ class Renderer:
         draw.rectangle((0, 0, w, h), fill=self._colors.background)
 
         self._draw_pipes(game)
+        self._draw_pickups(game)
         self._draw_bird(game)
         self._draw_clock(game)
         self._draw_best(game)
@@ -38,38 +39,74 @@ class Renderer:
         self._display.show()
 
     def _draw_pipes(self, game):
+        """Solids slide in from the edge they belong to, then settle.
+
+        The shape is translated, not scaled, so a triangle looks pushed up
+        through the floor instead of growing. Offsets are cosmetic: the pipe
+        geometry the physics reads is untouched.
+        """
         draw = self._display.draw
         h = self._display.height
         color = self._colors.pipe
+        cfg = self._cfg.pipes
         for pipe in game.pipes.pipes:
             x0 = pipe.x
             x1 = pipe.x + pipe.width
             mid = pipe.x + pipe.width * 0.5
+            ext = pipe.enter_extension(cfg.enter_seconds, cfg.enter_peak)
+            # Down for the floor side, up for the ceiling side.
+            drop = (1.0 - ext) * pipe.gap_bottom
+            lift = (1.0 - ext) * (h - pipe.gap_top)
+
             if pipe.shape == "triangle":
                 if pipe.has_bottom and pipe.gap_bottom > 0:
                     # World: base on floor, apex at gap_bottom.
                     draw.polygon(
                         [
-                            (x0, h),
-                            (x1, h),
-                            (mid, h - pipe.gap_bottom),
+                            (x0, h + drop),
+                            (x1, h + drop),
+                            (mid, h - pipe.gap_bottom + drop),
                         ],
                         fill=color,
                     )
                 if pipe.has_top and pipe.gap_top < h:
                     draw.polygon(
                         [
-                            (x0, 0),
-                            (x1, 0),
-                            (mid, h - pipe.gap_top),
+                            (x0, -lift),
+                            (x1, -lift),
+                            (mid, h - pipe.gap_top - lift),
                         ],
                         fill=color,
                     )
             else:
                 if pipe.has_bottom:
-                    draw.rectangle((x0, h - pipe.gap_bottom, x1, h), fill=color)
+                    draw.rectangle(
+                        (x0, h - pipe.gap_bottom + drop, x1, h + drop), fill=color
+                    )
                 if pipe.has_top:
-                    draw.rectangle((x0, 0, x1, h - pipe.gap_top), fill=color)
+                    draw.rectangle(
+                        (x0, -lift, x1, h - pipe.gap_top - lift), fill=color
+                    )
+
+    def _draw_pickups(self, game):
+        """Placeholder diamonds until the seasonal sprites land."""
+        draw = self._display.draw
+        h = self._display.height
+        for item in game.pickups.items:
+            top = world_to_screen_y(item.y, h, item.size)
+            cx = item.x + item.size / 2.0
+            cy = top + item.size / 2.0
+            r = item.size / 2.0
+            color = (
+                self._colors.pickup_invincible
+                if item.kind == "invincible"
+                else self._colors.pickup
+            )
+            draw.polygon(
+                [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)],
+                fill=color,
+                outline=self._colors.bird_outline,
+            )
 
     def _draw_bird(self, game):
         draw = self._display.draw

@@ -83,6 +83,20 @@ class PipeConfig:
     ground_min_seconds: float = 5.0
     ground_max_seconds: float = 10.0
     ground_height: float = 18.0
+    # Greybox entrance: solids stab in from the top / bottom edge once the
+    # obstacle is fully past the right edge. Cosmetic only - collision and the
+    # auto-pilot always use the final geometry, or the corridor would keep
+    # shrinking after the pilot had already committed to it.
+    # Headroom: an obstacle covers ~192px between entering and reaching the
+    # bird, so even at play_max_speed there are ~3s before it matters.
+    enter_seconds: float = 0.75
+    # How far past the seated position the stab punches, as a fraction of the
+    # solid's height. 1.2 = 120%, 1.0 = plain slide with no recoil.
+    enter_peak: float = 1.13
+    # Extra pixels inside the right edge before the stab starts. Raising it
+    # plays the animation further into frame, at the cost of the obstacle
+    # being invisible while it waits.
+    enter_margin_x: float = 0.0
     # Relative weights for spawn kinds (ground is rarer).
     weight_rect_both: float = 1.0
     weight_rect_bottom: float = 1.0
@@ -99,16 +113,29 @@ class PipeConfig:
 
 @dataclass(frozen=True)
 class ItemConfig:
-    """Reserved until we turn spawning on.
+    """Pickups. One box per item, triggers on overlap, never blocks flight.
 
-    Planned: coins (bonus score) and invincibility (disable bird hitbox).
+    Play mode only: the idle number is a real wall clock, and a pickup that
+    added score there would make the displayed time wrong.
+
+    Seasonal art (butterfly, popsicle, maple leaf, ...) swaps by kind; the
+    engine treats every kind the same except invincibility.
     """
 
-    spawn_enabled: bool = False
-    coin_score: int = 0
-    invincible_seconds: float = 0.0
-    # Chance a pipe carries an item on its top, when spawning is turned on.
-    top_item_chance: float = 0.0
+    spawn_enabled: bool = True
+    spawn_x: float = 240.0
+    size: float = 7.0
+    min_spacing: float = 120.0
+    max_spacing: float = 260.0
+    # Retry sooner when the spawn column was blocked by an obstacle.
+    retry_spacing: float = 24.0
+    # Keep this far clear of obstacle walls so the pickup stays reachable.
+    clearance: float = 5.0
+    edge_margin: float = 8.0
+    coin_score: int = 5
+    invincible_seconds: float = 3.0
+    # Invincibility stays off until the art and the HUD cue exist.
+    invincible_chance: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -180,7 +207,7 @@ class HudConfig:
     group_gap: int = 5
     best_margin_x: int = 4
     # Red feather in idle: month + day, no year.
-    date_format: str = "%m%d"
+    date_format: str = "%m/%d"
     # "+1" popup right of the white feather: jump up, then vanish.
     popup_gap: int = 4
     popup_seconds: float = 0.7
@@ -202,6 +229,8 @@ class ColorConfig:
     feather_minute: str = "#4C9F70"
     feather_second: str = "#F2F2F2"
     score_popup: str = "#5CE08A"
+    pickup: str = "#6FD3F2"
+    pickup_invincible: str = "#C77DFF"
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,7 @@ from enum import Enum, auto
 from .auto_pilot import AutoPilot
 from .bird import Bird
 from .config import GameConfig
+from .items import PickupField
 from .pipe import PipeField
 from .score import ScoreBoard
 
@@ -21,6 +22,7 @@ class Game:
         self.config = config
         self.bird = Bird(config)
         self.pipes = PipeField(config)
+        self.pickups = PickupField(config)
         self.scores = ScoreBoard(config)
         self._pilot = AutoPilot(config)
         self.mode = Mode.IDLE
@@ -67,6 +69,7 @@ class Game:
         self.bird.reset()
         self.bird.set_collision_enabled(False)
         self.pipes.clear()
+        self.pickups.clear()
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
 
@@ -75,6 +78,7 @@ class Game:
         self.bird.reset()
         self.bird.set_collision_enabled(True)
         self.pipes.clear()
+        self.pickups.clear()
         self.scores.reset_play()
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
@@ -116,8 +120,12 @@ class Game:
         self.scores.update(dt)
 
         if self.mode == Mode.IDLE:
+            # No pickups here on purpose: the idle number is the wall clock,
+            # and bonus score would make the displayed time a lie.
             self.scores.tick_idle(dt)
-            flap_held = self._pilot.should_hold_flap(self.bird, self.pipes, self.pipe_speed())
+            flap_held = self._pilot.should_hold_flap(
+                self.bird, self.pipes, self.pipe_speed()
+            )
             self.bird.update(dt, flap_held=flap_held, dying=False)
             self.pipes.update(dt, self.pipe_speed(), idle=True)
             return
@@ -128,6 +136,9 @@ class Game:
             self._tick_invincibility(dt)
             self.bird.update(dt, flap_held=flap_held, dying=False)
             self.pipes.update(dt, self.pipe_speed(), idle=False)
+            self.pickups.update(dt, self.pipe_speed(), pipes=self.pipes)
+            for pickup in self.pickups.take(self.bird):
+                pickup.apply(self)
             if self.config.bounds_kill and self.bird.is_off_screen():
                 self._begin_death()
                 return

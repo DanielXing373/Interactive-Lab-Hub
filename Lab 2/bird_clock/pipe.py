@@ -1,11 +1,32 @@
 """Scrolling obstacles: bi/uni rects & triangles, plus a long bottom ground bar."""
 
 import random
+from functools import lru_cache
 from typing import List, Optional, Tuple
 
 from .collision import hits_pipe
 from .config import GameConfig, PipeConfig
-from .items import Item, maybe_roll_item
+
+
+@lru_cache(maxsize=8)
+def _back_constant(peak: float) -> float:
+    """easeOutBack constant whose curve tops out at `peak`.
+
+    The curve is 1 + (c+1)u^3 + c*u^2 with u = p-1, whose maximum works out to
+    1 + 4c^3 / (27(c+1)^2). That does not invert cleanly, so bisect it once and
+    cache: callers get to say "120%" instead of guessing at a magic constant.
+    """
+    if peak <= 1.0:
+        return 0.0
+    target = peak - 1.0
+    lo, hi = 0.0, 50.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if 4.0 * mid ** 3 / (27.0 * (mid + 1.0) ** 2) < target:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
 
 
 class PipePair:
@@ -15,7 +36,6 @@ class PipePair:
         width: float,
         gap_bottom: float,
         gap_top: float,
-        item: Optional[Item] = None,
         shape: str = "rect",
         has_bottom: bool = True,
         has_top: bool = True,
@@ -25,12 +45,30 @@ class PipePair:
         self.width = width
         self.gap_bottom = gap_bottom
         self.gap_top = gap_top
-        self.item = item
         self.shape = shape
         self.has_bottom = has_bottom
         self.has_top = has_top
         self.is_ground = is_ground
         self.passed = False
+        # Seconds since the obstacle cleared the right edge; drives the
+        # entrance animation only, never collision.
+        self.enter_age = 0.0
+
+    @property
+    def animates_entrance(self) -> bool:
+        """Ground strips are one long band, so stabbing them in looks wrong."""
+        return not self.is_ground
+
+    def enter_extension(self, seconds: float, peak: float) -> float:
+        """0 = still outside the screen edge, 1 = seated. Overshoots to `peak`."""
+        if not self.animates_entrance or seconds <= 0:
+            return 1.0
+        p = self.enter_age / seconds
+        if p >= 1.0:
+            return 1.0
+        c = _back_constant(peak)
+        inv = p - 1.0
+        return 1.0 + (c + 1.0) * inv ** 3 + c * inv ** 2
 
     def safe_band(self, screen_h: float) -> Tuple[float, float]:
         """Y range that clears this obstacle (triangles: apex constriction)."""
@@ -100,8 +138,8 @@ class PipePair:
 class PipeField:
     def __init__(self, config: GameConfig):
         self._cfg: PipeConfig = config.pipes
-        self._items_cfg = config.items
         self._screen_h = config.screen.height
+        self._screen_w = config.screen.width
         self._bird_h = config.bird.height
         self.pipes: List[PipePair] = []
         self._distance_until_spawn = 0.0
@@ -113,6 +151,11 @@ class PipeField:
     def update(self, dt: float, speed: float, idle: bool):
         for pipe in self.pipes:
             pipe.move(dt, speed)
+            # Hold the animation until the whole obstacle is inside the right
+            # edge, otherwise it plays out of frame and reads as a pop-in.
+            trigger = self._screen_w - self._cfg.enter_margin_x
+            if pipe.animates_entrance and pipe.x + pipe.width <= trigger:
+                pipe.enter_age += dt
         self.pipes = [p for p in self.pipes if not p.is_off_left()]
         self._distance_until_spawn -= speed * dt
         if self._distance_until_spawn <= 0:
@@ -186,7 +229,6 @@ class PipeField:
 
     def spawn(self, idle: bool, speed: float = 32.0):
         kind, has_bottom, has_top = self._pick_kind()
-        item = maybe_roll_item(self._items_cfg)
         width = random.uniform(self._cfg.min_width, self._cfg.max_width)
 
         if kind == "ground":
@@ -199,7 +241,6 @@ class PipeField:
                     width=ground_width,
                     gap_bottom=height,
                     gap_top=self._screen_h,
-                    item=item,
                     shape="rect",
                     has_bottom=True,
                     has_top=False,
@@ -223,7 +264,6 @@ class PipeField:
                 width=width,
                 gap_bottom=gap_bottom,
                 gap_top=gap_top,
-                item=item,
                 shape=kind,
                 has_bottom=has_bottom,
                 has_top=has_top,
