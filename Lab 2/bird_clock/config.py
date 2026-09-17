@@ -1,0 +1,192 @@
+"""Tunable numbers for the bird-clock game.
+
+World coordinates: origin at bottom-left, +x right, +y up.
+That way a positive velocity is "up", matching the hold-to-flap design.
+The renderer converts to PIL's top-left / +y-down when drawing.
+
+Change values here after on-device testing. Game code should not hardcode sizes.
+
+Later (not in this pass):
+- Spawn coins / invincibility using ItemConfig
+- Map real wall-clock into a sexagesimal / fruit-token score display
+- Change pipes, palette, and rules by time of day
+"""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ScreenConfig:
+    width: int = 240
+    height: int = 135
+    rotation: int = 90
+    backlight_gpio: int = 22
+    # ST7789 init matches Lab 2 screen_clock.py
+    panel_width: int = 135
+    panel_height: int = 240
+    x_offset: int = 53
+    y_offset: int = 40
+    baudrate: int = 64_000_000
+    cs_gpio: int = 5
+    dc_gpio: int = 25
+
+
+@dataclass(frozen=True)
+class ButtonConfig:
+    """MiniPiTFT: top button = start/retry, bottom button = flap."""
+
+    start_gpio: int = 23  # button A, upper
+    flap_gpio: int = 24  # button B, lower
+    active_low: bool = True
+
+
+@dataclass(frozen=True)
+class BirdConfig:
+    # Visible hitbox is this exact rectangle (no sprite inset).
+    width: float = 8.0
+    height: float = 8.0
+    # Fixed x: pipes scroll, bird stays put.
+    x: float = 32.0
+    start_y: float = 64.0
+    # Acceleration while the flap button is held (up).
+    flap_accel: float = 260.0
+    # Acceleration when released (negative = downward).
+    gravity: float = -140.0
+    max_up_speed: float = 70.0
+    max_down_speed: float = -90.0
+    # Death: extra downward accel so the bird leaves the screen.
+    death_gravity: float = -220.0
+
+
+@dataclass(frozen=True)
+class PipeConfig:
+    spawn_x: float = 240.0
+    # Random mix: bi/uni rect, bi/uni triangle, plus a long bottom ground strip.
+    min_spacing: float = 62.0
+    max_spacing: float = 170.0
+    min_width: float = 4.0
+    max_width: float = 12.0
+    min_gap: float = 36.0
+    max_gap: float = 88.0
+    # Idle is harder: pipes more often, gaps tighter (still >= bird + gap_over_bird).
+    idle_min_spacing: float = 38.0
+    idle_max_spacing: float = 82.0
+    idle_min_gap: float = 22.0
+    idle_max_gap: float = 40.0
+    # Gap is at least bird hitbox plus this many pixels (both modes).
+    gap_over_bird: float = 10.0
+    edge_margin: float = 6.0
+    # Single-sided solid height (rect or triangle apex).
+    uni_min_height: float = 28.0
+    uni_max_height: float = 72.0
+    # Continuous bottom bar lasting this many seconds at current scroll speed.
+    ground_min_seconds: float = 5.0
+    ground_max_seconds: float = 10.0
+    ground_height: float = 18.0
+    # Relative weights for spawn kinds (ground is rarer).
+    weight_rect_both: float = 1.0
+    weight_rect_bottom: float = 1.0
+    weight_rect_top: float = 1.0
+    weight_tri_both: float = 1.0
+    weight_tri_bottom: float = 1.0
+    weight_tri_top: float = 1.0
+    weight_ground: float = 0.55
+    idle_speed: float = 28.0
+    play_start_speed: float = 32.0
+    play_speed_gain: float = 2.0
+    play_max_speed: float = 64.0
+
+
+@dataclass(frozen=True)
+class ItemConfig:
+    """Reserved until we turn spawning on.
+
+    Planned: coins (bonus score) and invincibility (disable bird hitbox).
+    """
+
+    spawn_enabled: bool = False
+    coin_score: int = 0
+    invincible_seconds: float = 0.0
+    # Chance a pipe carries an item on its top, when spawning is turned on.
+    top_item_chance: float = 0.0
+
+
+@dataclass(frozen=True)
+class ScoreConfig:
+    """Idle uses a fake ticking score for now.
+
+    Later: map a real wall-clock into this number, then render it in a
+    sexagesimal / fruit-token display instead of raw digits.
+    """
+
+    points_per_second: int = 1
+    idle_starts_at: int = 0
+    play_starts_at: int = 0
+
+
+@dataclass(frozen=True)
+class DeathConfig:
+    wait_before_idle_seconds: float = 10.0
+
+
+@dataclass(frozen=True)
+class AutoPilotConfig:
+    """Idle flight: next pipe first, later pipes only as a weak tie-break.
+
+    First action is one frame. If the search cannot clear the next gap,
+    fall back to one-pipe greedy. Aim at the gap wall toward the following
+    pipe (skim) instead of waiting to pass through the center.
+    """
+
+    aim_slack: float = 2.0
+    look_ahead_min: float = 0.12
+    hover_y: float = 67.0
+    pipes_ahead: int = 3
+    # Obstacles arriving within this many seconds also constrain the corridor.
+    reaction_seconds: float = 2.0
+    # Corridor intersection does the steering; a deep search only costs Pi time.
+    chunks: int = 5
+    chunk_seconds: float = 0.25
+    sim_dt: float = 1.0 / 30.0
+    crash_penalty: float = 1_000_000.0
+    center_weight: float = 1.0
+    exit_speed_weight: float = 0.02
+    skim_margin: float = 2.0
+
+
+@dataclass(frozen=True)
+class LoopConfig:
+    fps: float = 30.0
+
+
+@dataclass(frozen=True)
+class ColorConfig:
+    background: str = "#101820"
+    bird: str = "#F5D76E"
+    bird_outline: str = "#FFFFFF"
+    pipe: str = "#3D9970"
+    hud: str = "#FFFFFF"
+    hint: str = "#AAAAAA"
+    death: str = "#FF6666"
+
+
+@dataclass(frozen=True)
+class GameConfig:
+    screen: ScreenConfig = ScreenConfig()
+    buttons: ButtonConfig = ButtonConfig()
+    bird: BirdConfig = BirdConfig()
+    pipes: PipeConfig = PipeConfig()
+    items: ItemConfig = ItemConfig()
+    score: ScoreConfig = ScoreConfig()
+    death: DeathConfig = DeathConfig()
+    auto_pilot: AutoPilotConfig = AutoPilotConfig()
+    loop: LoopConfig = LoopConfig()
+    colors: ColorConfig = ColorConfig()
+    # Floor/ceiling wrap: leaving the top enters the bottom, and vice versa.
+    bounds_kill: bool = False
+    vertical_wrap: bool = True
+    font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    font_size: int = 12
+
+
+DEFAULT = GameConfig()
