@@ -171,7 +171,8 @@ class HudConfig:
     margin_x: int = 4
     clock_y: int = 1
     hint_top_y: int = 22
-    hint_bottom_y: int = 58
+    # Button B sits low, near its physical position on the board.
+    hint_bottom_y: int = 114
     # Feather placeholder size; swap for a sprite later.
     feather_w: int = 5
     feather_h: int = 8
