@@ -160,6 +160,33 @@ class LoopConfig:
 
 
 @dataclass(frozen=True)
+class HudConfig:
+    """Top-left feather clock, then left-edge button hints below it.
+
+    Hints sit on rows 1.5 and 5 so they clear the clock row. Everything here
+    is decoration: no hitboxes.
+    """
+
+    line_height: int = 14
+    margin_x: int = 4
+    clock_y: int = 1
+    hint_top_y: int = 22
+    hint_bottom_y: int = 58
+    # Feather placeholder size; swap for a sprite later.
+    feather_w: int = 5
+    feather_h: int = 8
+    feather_text_gap: int = 2
+    group_gap: int = 5
+    best_margin_x: int = 4
+    # Red feather in idle: month + day, no year.
+    date_format: str = "%m%d"
+    # "+1" popup right of the white feather: jump up, then vanish.
+    popup_gap: int = 4
+    popup_seconds: float = 0.7
+    popup_rise: int = 9
+
+
+@dataclass(frozen=True)
 class ColorConfig:
     background: str = "#101820"
     bird: str = "#F5D76E"
@@ -168,6 +195,12 @@ class ColorConfig:
     hud: str = "#FFFFFF"
     hint: str = "#AAAAAA"
     death: str = "#FF6666"
+    # Feather clock: date / hour / minute / second.
+    feather_date: str = "#E4572E"
+    feather_hour: str = "#F2C14E"
+    feather_minute: str = "#4C9F70"
+    feather_second: str = "#F2F2F2"
+    score_popup: str = "#5CE08A"
 
 
 @dataclass(frozen=True)
@@ -181,6 +214,7 @@ class GameConfig:
     death: DeathConfig = DeathConfig()
     auto_pilot: AutoPilotConfig = AutoPilotConfig()
     loop: LoopConfig = LoopConfig()
+    hud: HudConfig = HudConfig()
     colors: ColorConfig = ColorConfig()
     # Floor/ceiling wrap: leaving the top enters the bottom, and vice versa.
     bounds_kill: bool = False

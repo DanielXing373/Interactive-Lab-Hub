@@ -1,5 +1,8 @@
 """Draw world objects onto the 240x135 landscape buffer."""
 
+from PIL import ImageColor
+
+from . import clock_display
 from .config import GameConfig
 
 
@@ -12,7 +15,14 @@ class Renderer:
     def __init__(self, display, config: GameConfig):
         self._display = display
         self._cfg = config
+        self._hud = config.hud
         self._colors = config.colors
+        self._feather_colors = {
+            clock_display.DATE: config.colors.feather_date,
+            clock_display.HOUR: config.colors.feather_hour,
+            clock_display.MINUTE: config.colors.feather_minute,
+            clock_display.SECOND: config.colors.feather_second,
+        }
 
     def draw(self, game):
         draw = self._display.draw
@@ -22,7 +32,9 @@ class Renderer:
 
         self._draw_pipes(game)
         self._draw_bird(game)
-        self._draw_hud(game)
+        self._draw_clock(game)
+        self._draw_best(game)
+        self._draw_hints(game)
         self._display.show()
 
     def _draw_pipes(self, game):
@@ -73,16 +85,88 @@ class Renderer:
                 outline=outline,
             )
 
-    def _draw_hud(self, game):
+    def _feather(self, x: int, y: int, color: str):
+        """Placeholder feather: quill plus a leaf. Swap for a sprite later."""
+        draw = self._display.draw
+        hud = self._hud
+        w = hud.feather_w
+        h = hud.feather_h
+        draw.polygon(
+            [
+                (x + w / 2.0, y),
+                (x + w, y + h * 0.45),
+                (x + w / 2.0, y + h),
+                (x, y + h * 0.45),
+            ],
+            fill=color,
+        )
+        draw.line((x + w / 2.0, y, x + w / 2.0, y + h), fill=color)
+
+    def _draw_clock(self, game):
+        """Feather tokens for date / hour / minute / second, top-left."""
         draw = self._display.draw
         font = self._display.font
-        c = self._colors.hud
-        hint = self._colors.hint
+        hud = self._hud
+        x = hud.margin_x
+        y = hud.clock_y
+        for key, text in clock_display.units_for(game, hud.date_format):
+            self._feather(x, y + 2, self._feather_colors[key])
+            x += hud.feather_w + hud.feather_text_gap
+            draw.text((x, y), text, font=font, fill=self._colors.hud)
+            x += self._text_width(text) + hud.group_gap
+        self._draw_popups(game, x - hud.group_gap + hud.popup_gap, y)
+
+    def _draw_popups(self, game, x: int, y: int):
+        """Green "+n" right of the seconds feather: jumps up, then vanishes."""
+        popups = game.scores.popups
+        if not popups:
+            return
+        draw = self._display.draw
+        font = self._display.font
+        base = ImageColor.getrgb(self._colors.score_popup)
+        bg = ImageColor.getrgb(self._colors.background)
+        for popup in popups:
+            p = popup.progress
+            # Fast hop out, slow settle, then fade into the background.
+            rise = self._hud.popup_rise * (1.0 - (1.0 - p) ** 2)
+            color = tuple(
+                int(b + (g - b) * p) for b, g in zip(base, bg)
+            )
+            draw.text((x, y - rise), popup.text, font=font, fill=color)
+
+    def _draw_best(self, game):
+        """Best run, top-right. The clock already carries the live score."""
         if game.in_idle:
-            draw.text((4, 2), f"IDLE {game.scores.idle_score}", font=font, fill=c)
-            draw.text((4, 16), "A start", font=font, fill=hint)
-        elif game.in_play:
-            draw.text((4, 2), f"S {game.scores.current_score}  B {game.scores.best_score}", font=font, fill=c)
+            return
+        text = f"B {game.scores.best_score}"
+        x = self._display.width - self._hud.best_margin_x - self._text_width(text)
+        self._display.draw.text(
+            (x, self._hud.clock_y), text, font=self._display.font, fill=self._colors.hint
+        )
+
+    def _text_width(self, text: str) -> int:
+        font = self._display.font
+        try:
+            left, _, right, _ = font.getbbox(text)
+            return int(right - left)
+        except AttributeError:
+            return len(text) * 6
+
+    def _draw_hints(self, game):
+        """Left-edge arrows for the two buttons. Hidden while playing."""
+        draw = self._display.draw
+        font = self._display.font
+        hud = self._hud
+        color = self._colors.hint
+
+        if game.in_idle:
+            top_text = "<- start"
+            bottom_text = "<- fly"
+        elif game.waiting_after_death:
+            top_text = f"<- return {game.seconds_until_idle:.0f}s"
+            bottom_text = "<- retry"
         else:
-            draw.text((4, 2), f"S {game.scores.current_score}  B {game.scores.best_score}", font=font, fill=c)
-            draw.text((4, 16), "A retry  B idle", font=font, fill=hint)
+            return
+
+        draw.text((hud.margin_x, hud.hint_top_y), top_text, font=font, fill=color)
+        draw.text((hud.margin_x, hud.hint_bottom_y), bottom_text, font=font, fill=color)

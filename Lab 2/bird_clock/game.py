@@ -42,6 +42,17 @@ class Game:
     def is_dying(self) -> bool:
         return self.mode in (Mode.DYING, Mode.AFTER_DEATH)
 
+    @property
+    def waiting_after_death(self) -> bool:
+        return self.mode == Mode.AFTER_DEATH
+
+    @property
+    def seconds_until_idle(self) -> float:
+        """Countdown shown next to the return hint. 0 outside AFTER_DEATH."""
+        if self.mode != Mode.AFTER_DEATH:
+            return 0.0
+        return max(0.0, self._after_death_timer)
+
     def pipe_speed(self) -> float:
         pipes = self.config.pipes
         if self.mode == Mode.IDLE:
@@ -93,14 +104,16 @@ class Game:
             self.enter_play()
             return
         if self.mode == Mode.AFTER_DEATH:
-            if start_pressed:
+            # After death the buttons swap: A returns to idle, B retries.
+            if flap_pressed:
                 self.enter_play()
-            elif flap_pressed:
+            elif start_pressed:
                 self.enter_idle()
             return
 
     def update(self, dt: float):
         flap_held = self._flap_held
+        self.scores.update(dt)
 
         if self.mode == Mode.IDLE:
             self.scores.tick_idle(dt)
