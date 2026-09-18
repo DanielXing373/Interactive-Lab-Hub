@@ -62,15 +62,17 @@ class BirdConfig:
 class PipeConfig:
     spawn_x: float = 240.0
     # Random mix: bi/uni rect, bi/uni triangle, plus a long bottom ground strip.
-    min_spacing: float = 62.0
-    max_spacing: float = 170.0
-    min_width: float = 4.0
-    max_width: float = 12.0
+    # Dense on purpose: ~4-5 columns fit on the 240px screen for spectacle.
+    # Left-edge spacing ≈ this value; 240/55 ≈ 4.4 obstacles visible at once.
+    min_spacing: float = 48.0
+    max_spacing: float = 68.0
+    min_width: float = 36.0
+    max_width: float = 58.0
     min_gap: float = 36.0
     max_gap: float = 88.0
     # Idle is harder: pipes more often, gaps tighter (still >= bird + gap_over_bird).
-    idle_min_spacing: float = 38.0
-    idle_max_spacing: float = 82.0
+    idle_min_spacing: float = 44.0
+    idle_max_spacing: float = 62.0
     idle_min_gap: float = 22.0
     idle_max_gap: float = 40.0
     # Gap is at least bird hitbox plus this many pixels (both modes).
@@ -97,18 +99,14 @@ class PipeConfig:
     # plays the animation further into frame, at the cost of the obstacle
     # being invisible while it waits.
     enter_margin_x: float = 0.0
-    # Relative weights for spawn kinds (ground is rarer).
-    weight_rect_both: float = 1.0
-    weight_rect_bottom: float = 1.0
-    weight_rect_top: float = 1.0
-    weight_tri_both: float = 1.0
-    weight_tri_bottom: float = 1.0
-    weight_tri_top: float = 1.0
-    weight_ground: float = 0.55
-    idle_speed: float = 28.0
-    play_start_speed: float = 32.0
+    # Spawn weights live per scene now, in scenes.py: a scene only rolls the
+    # shapes it has art for.
+    # Retry distance when the scene had nothing legal to spawn.
+    spawn_retry_spacing: float = 20.0
+    idle_speed: float = 34.0
+    play_start_speed: float = 40.0
     play_speed_gain: float = 2.0
-    play_max_speed: float = 64.0
+    play_max_speed: float = 72.0
 
 
 @dataclass(frozen=True)
@@ -124,13 +122,20 @@ class ItemConfig:
 
     spawn_enabled: bool = True
     spawn_x: float = 240.0
-    size: float = 7.0
+    # Hitbox. Generous on purpose - difficulty is not the point here. It still
+    # has to fit inside an obstacle gap, and past ~18 too many spawns get
+    # skipped for want of room (6% skipped at 16, 10% at 22).
+    size: float = 16.0
+    # Drawn size, centred on the hitbox. Free to overlap walls: the pickup
+    # reads as a separate layer, and collision never uses this number.
+    sprite_size: float = 26.0
     min_spacing: float = 120.0
     max_spacing: float = 260.0
     # Retry sooner when the spawn column was blocked by an obstacle.
     retry_spacing: float = 24.0
-    # Keep this far clear of obstacle walls so the pickup stays reachable.
-    clearance: float = 5.0
+    # Keep the hitbox this far clear of obstacle walls so it stays reachable
+    # without grazing. The art may still overlap; only the hitbox is fenced.
+    clearance: float = 3.0
     edge_margin: float = 8.0
     coin_score: int = 5
     invincible_seconds: float = 3.0
@@ -234,6 +239,31 @@ class ColorConfig:
 
 
 @dataclass(frozen=True)
+class SkinConfig:
+    """Where art lives. Anything missing falls back to greybox.
+
+    Folder layout: bird_clock/<root>/<skin>/skin.json plus its PNGs, where
+    <skin> comes from the active scene.
+    """
+
+    enabled: bool = True
+    root: str = "assets"
+
+
+@dataclass(frozen=True)
+class SceneConfig:
+    """Which scene (art + spawn pool) is live.
+
+    scenes=None uses scenes.DEFAULT_SCENES. Set auto_by_date=False to pin the
+    fallback and ignore the calendar.
+    """
+
+    auto_by_date: bool = True
+    fallback: str = "spring"
+    scenes: tuple = None
+
+
+@dataclass(frozen=True)
 class GameConfig:
     screen: ScreenConfig = ScreenConfig()
     buttons: ButtonConfig = ButtonConfig()
@@ -244,6 +274,8 @@ class GameConfig:
     death: DeathConfig = DeathConfig()
     auto_pilot: AutoPilotConfig = AutoPilotConfig()
     loop: LoopConfig = LoopConfig()
+    skin: SkinConfig = SkinConfig()
+    scenes: SceneConfig = SceneConfig()
     hud: HudConfig = HudConfig()
     colors: ColorConfig = ColorConfig()
     # Floor/ceiling wrap: leaving the top enters the bottom, and vice versa.

@@ -1,11 +1,19 @@
 """Scrolling obstacles: bi/uni rects & triangles, plus a long bottom ground bar."""
 
+import json
+import os
 import random
 from functools import lru_cache
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+from . import scenes
 from .collision import hits_pipe
 from .config import GameConfig, PipeConfig
+
+try:
+    from PIL import Image
+except ImportError:  # pragma: no cover
+    Image = None
 
 
 @lru_cache(maxsize=8)
@@ -138,15 +146,24 @@ class PipePair:
 class PipeField:
     def __init__(self, config: GameConfig):
         self._cfg: PipeConfig = config.pipes
+        self._skin_root = config.skin.root
         self._screen_h = config.screen.height
         self._screen_w = config.screen.width
         self._bird_h = config.bird.height
         self.pipes: List[PipePair] = []
         self._distance_until_spawn = 0.0
+        self._scene = scenes.DEFAULT_SCENES[-1]  # greybox until a scene is set
+        # slot -> width/height of the source PNG, used to keep trees proportional.
+        self._aspects: Dict[str, float] = {}
 
     def clear(self):
         self.pipes.clear()
         self._distance_until_spawn = 0.0
+
+    def set_pool(self, scene):
+        """Swap the lottery pool and reload sprite aspects for this skin."""
+        self._scene = scene
+        self._aspects = self._load_aspects(scene.skin)
 
     def update(self, dt: float, speed: float, idle: bool):
         for pipe in self.pipes:
@@ -159,12 +176,19 @@ class PipeField:
         self.pipes = [p for p in self.pipes if not p.is_off_left()]
         self._distance_until_spawn -= speed * dt
         if self._distance_until_spawn <= 0:
-            self.spawn(idle=idle, speed=speed)
-            if idle:
-                spacing = random.uniform(self._cfg.idle_min_spacing, self._cfg.idle_max_spacing)
+            if not self.spawn(idle=idle, speed=speed):
+                # Nothing legal for this scene right now (usually a ground
+                # strip with no hanging obstacle to pair it with). Look again
+                # shortly rather than burn a whole spacing interval.
+                self._distance_until_spawn = self._cfg.spawn_retry_spacing
+            elif idle:
+                self._distance_until_spawn = random.uniform(
+                    self._cfg.idle_min_spacing, self._cfg.idle_max_spacing
+                )
             else:
-                spacing = random.uniform(self._cfg.min_spacing, self._cfg.max_spacing)
-            self._distance_until_spawn = spacing
+                self._distance_until_spawn = random.uniform(
+                    self._cfg.min_spacing, self._cfg.max_spacing
+                )
 
     def ground_at_spawn(self) -> Optional[PipePair]:
         """Ground strip still covering the spawn column, if any."""
@@ -174,31 +198,98 @@ class PipeField:
                 return p
         return None
 
-    def _pick_kind(self) -> Tuple[str, bool, bool]:
-        """Return (shape, has_bottom, has_top). shape 'ground' is bottom rect strip.
+    def _load_aspects(self, skin: str) -> Dict[str, float]:
+        """width/height for each obstacle slot, read from the skin's PNGs."""
+        if Image is None:
+            return {}
+        folder = os.path.join(os.path.dirname(__file__), self._skin_root, skin)
+        path = os.path.join(folder, "skin.json")
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        except (OSError, ValueError):
+            return {}
+        aspects: Dict[str, float] = {}
+        for slot, spec in (manifest.get("obstacles") or {}).items():
+            if not isinstance(spec, dict):
+                continue
+            names = spec.get("file")
+            if isinstance(names, (list, tuple)):
+                name = names[0] if names else None
+            else:
+                name = names
+            if not name:
+                continue
+            try:
+                with Image.open(os.path.join(folder, name)) as im:
+                    if im.height > 0:
+                        aspects[slot] = im.width / float(im.height)
+            except (OSError, ValueError):
+                continue
+        return aspects
+
+    def _slot_name(self, shape: str, has_bottom: bool, has_top: bool) -> str:
+        if shape == "ground":
+            return "ground"
+        if shape == "triangle":
+            if has_bottom and has_top:
+                return "tri_both"
+            return "tri_bottom" if has_bottom else "tri_top"
+        if has_bottom and has_top:
+            return "rect_both"
+        return "rect_bottom" if has_bottom else "rect_top"
+
+    def _fit_aspect(self, slot: str, solid_h: float) -> Tuple[float, float]:
+        """Return (width, solid_h) matching the sprite, clamped to config range.
+
+        No aspect (missing art / greybox) falls back to a random width.
+        """
+        aspect = self._aspects.get(slot)
+        if aspect is None or aspect <= 0 or solid_h <= 0:
+            return random.uniform(self._cfg.min_width, self._cfg.max_width), solid_h
+        width = solid_h * aspect
+        if width < self._cfg.min_width:
+            width = self._cfg.min_width
+            solid_h = width / aspect
+        elif width > self._cfg.max_width:
+            width = self._cfg.max_width
+            solid_h = width / aspect
+        # Keep single-sided solids inside the authored height band when possible.
+        lo, hi = self._cfg.uni_min_height, self._cfg.uni_max_height
+        if solid_h > hi:
+            solid_h = hi
+            width = min(self._cfg.max_width, max(self._cfg.min_width, solid_h * aspect))
+        elif solid_h < lo:
+            solid_h = lo
+            width = min(self._cfg.max_width, max(self._cfg.min_width, solid_h * aspect))
+        return width, solid_h
+
+    def _pool(self) -> List[Tuple[str, float]]:
+        """Candidate kinds and weights, filtered to what may spawn right now.
 
         While a ground strip runs under the spawn column, only top-side
         obstacles are allowed: a second floor solid would leave no corridor.
         """
-        cfg = self._cfg
-        if self.ground_at_spawn() is not None:
-            choices = [
-                ("rect", False, True, cfg.weight_rect_top),
-                ("triangle", False, True, cfg.weight_tri_top),
-            ]
-        else:
-            choices = [
-                ("rect", True, True, cfg.weight_rect_both),
-                ("rect", True, False, cfg.weight_rect_bottom),
-                ("rect", False, True, cfg.weight_rect_top),
-                ("triangle", True, True, cfg.weight_tri_both),
-                ("triangle", True, False, cfg.weight_tri_bottom),
-                ("triangle", False, True, cfg.weight_tri_top),
-                ("ground", True, False, cfg.weight_ground),
-            ]
-        weights = [c[3] for c in choices]
-        shape, has_bottom, has_top, _ = random.choices(choices, weights=weights, k=1)[0]
-        return shape, has_bottom, has_top
+        kinds = scenes.KIND_SHAPES
+        allowed = scenes.TOP_ONLY_KINDS if self.ground_at_spawn() else tuple(kinds)
+        scene = self._scene
+        return [(k, scene.weight(k)) for k in allowed if scene.weight(k) > 0]
+
+    def _pick_kind(self) -> Optional[Tuple[str, bool, bool]]:
+        """Chosen (shape, has_bottom, has_top), or None to spawn nothing.
+
+        None happens when a scene has no art for anything legal right now -
+        typically a ground strip is running and the scene has no hanging
+        obstacle. Skipping is correct: substituting a shape the scene never
+        declared would put an undrawn greybox block on screen.
+        """
+        pool = self._pool()
+        if not pool:
+            return None
+        kind = random.choices([k for k, _ in pool], weights=[w for _, w in pool], k=1)[0]
+        return scenes.KIND_SHAPES[kind]
 
     def _bilateral_gap(self, idle: bool) -> Tuple[float, float]:
         usable = self._screen_h - 2 * self._cfg.edge_margin
@@ -227,12 +318,18 @@ class PipeField:
         lo = min(self._cfg.uni_min_height, hi)
         return random.uniform(lo, hi)
 
-    def spawn(self, idle: bool, speed: float = 32.0):
-        kind, has_bottom, has_top = self._pick_kind()
-        width = random.uniform(self._cfg.min_width, self._cfg.max_width)
+    def spawn(self, idle: bool, speed: float = 32.0) -> bool:
+        picked = self._pick_kind()
+        if picked is None:
+            return False
+        kind, has_bottom, has_top = picked
+        slot = self._slot_name(kind if kind != "ground" else "ground", has_bottom, has_top)
 
         if kind == "ground":
-            duration = random.uniform(self._cfg.ground_min_seconds, self._cfg.ground_max_seconds)
+            span = self._scene.ground_seconds or (
+                self._cfg.ground_min_seconds, self._cfg.ground_max_seconds
+            )
+            duration = random.uniform(span[0], span[1])
             ground_width = max(self._cfg.min_width, max(speed, 1.0) * duration)
             height = self._cfg.ground_height
             self.pipes.append(
@@ -247,16 +344,29 @@ class PipeField:
                     is_ground=True,
                 )
             )
-            return
+            return True
 
         if has_bottom and has_top:
             gap_bottom, gap_top = self._bilateral_gap(idle)
+            solid = max(gap_bottom, self._screen_h - gap_top)
+            width, _ = self._fit_aspect(slot, solid)
         elif has_bottom:
-            gap_bottom, gap_top = self._uni_height(), self._screen_h
+            solid = self._uni_height()
+            width, solid = self._fit_aspect(slot, solid)
+            gap_bottom, gap_top = solid, self._screen_h
         else:
             ground = self.ground_at_spawn()
             floor = ground.gap_bottom if ground is not None else 0.0
-            gap_bottom, gap_top = floor, self._screen_h - self._uni_height(floor)
+            solid = self._uni_height(floor)
+            width, solid = self._fit_aspect(slot, solid)
+            # Keep a bird-sized corridor above the floor when a ground strip runs.
+            max_solid = self._screen_h - floor - (
+                self._bird_h + self._cfg.gap_over_bird + self._cfg.edge_margin
+            )
+            if solid > max_solid > 0:
+                solid = max_solid
+                width, solid = self._fit_aspect(slot, solid)
+            gap_bottom, gap_top = floor, self._screen_h - solid
 
         self.pipes.append(
             PipePair(
@@ -269,6 +379,7 @@ class PipeField:
                 has_top=has_top,
             )
         )
+        return True
 
     def next_ahead(self, bird_x: float) -> Optional[PipePair]:
         ahead = self.upcoming(bird_x, limit=1)

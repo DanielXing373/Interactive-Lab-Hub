@@ -8,6 +8,7 @@ from .config import GameConfig
 from .items import PickupField
 from .pipe import PipeField
 from .score import ScoreBoard
+from .scenes import SceneBook
 
 
 class Mode(Enum):
@@ -24,12 +25,16 @@ class Game:
         self.pipes = PipeField(config)
         self.pickups = PickupField(config)
         self.scores = ScoreBoard(config)
+        self.scene_book = SceneBook(config)
+        self.pipes.set_pool(self.scene_book.current)
         self._pilot = AutoPilot(config)
         self.mode = Mode.IDLE
         self._play_elapsed = 0.0
         self._after_death_timer = 0.0
         self._invincible_left = 0.0
         self._flap_held = False
+        # Total distance scrolled, for parallax layers.
+        self.scroll_x = 0.0
         self.enter_idle()
 
     @property
@@ -83,6 +88,18 @@ class Game:
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
 
+    @property
+    def scene(self):
+        return self.scene_book.current
+
+    def next_scene(self):
+        """Cheat button. Clears the field so the new pool takes effect at once."""
+        scene = self.scene_book.next()
+        self.pipes.set_pool(scene)
+        self.pipes.clear()
+        self.pickups.clear()
+        return scene
+
     def add_bonus_score(self, amount: int):
         self.scores.add_bonus(amount)
 
@@ -104,8 +121,13 @@ class Game:
 
     def handle_input(self, start_pressed: bool, flap_pressed: bool, flap_held: bool):
         self._flap_held = flap_held
-        if self.mode == Mode.IDLE and start_pressed:
-            self.enter_play()
+        if self.mode == Mode.IDLE:
+            if start_pressed:
+                self.enter_play()
+            elif flap_pressed:
+                # Idle has no use for flap (the auto-pilot flies), so it is
+                # the free button: step through scenes for previewing/filming.
+                self.next_scene()
             return
         if self.mode == Mode.AFTER_DEATH:
             # After death the buttons swap: A returns to idle, B retries.
@@ -118,6 +140,8 @@ class Game:
     def update(self, dt: float):
         flap_held = self._flap_held
         self.scores.update(dt)
+        if self.mode in (Mode.IDLE, Mode.PLAY):
+            self.scroll_x += self.pipe_speed() * dt
 
         if self.mode == Mode.IDLE:
             # No pickups here on purpose: the idle number is the wall clock,

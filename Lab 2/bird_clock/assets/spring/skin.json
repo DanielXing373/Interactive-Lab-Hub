@@ -1,0 +1,33 @@
+{
+  "name": "spring",
+  "background": "#BFE6F2",
+  "sky": "sky.png",
+  "far": "far.png",
+  "far_parallax": 0.35,
+  "obstacles": {
+    "rect_bottom": {
+      "file": ["cherryblossom.png"],
+      "stretch_start": 23,
+      "stretch_end": 32
+    },
+    "rect_top": {
+      "file": ["cherryblossom.png"],
+      "flip_y": true,
+      "stretch_start": 23,
+      "stretch_end": 32
+    },
+    "tri_bottom": {
+      "file": ["hill.png"]
+    },
+    "tri_top": {
+      "file": ["hill_down.png"]
+    },
+    "ground": {
+      "file": ["caterpillar.png"]
+    }
+  },
+  "pickup": {
+    "coin": ["butterfly.png"]
+  },
+  "bird": "bird.png"
+}
