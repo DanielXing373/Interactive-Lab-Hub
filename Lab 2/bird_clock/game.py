@@ -5,7 +5,7 @@ from enum import Enum, auto
 from .auto_pilot import AutoPilot
 from .bird import Bird
 from .config import GameConfig
-from .items import PickupField
+from .items import COIN, PickupField
 from .pipe import PipeField
 from .score import ScoreBoard
 from .scenes import SceneBook
@@ -75,6 +75,7 @@ class Game:
         self.bird.set_collision_enabled(False)
         self.pipes.clear()
         self.pickups.clear()
+        self.scores.clear_world_popups()
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
 
@@ -100,8 +101,16 @@ class Game:
         self.pickups.clear()
         return scene
 
-    def add_bonus_score(self, amount: int):
-        self.scores.add_bonus(amount)
+    def add_bonus_score(self, amount: int, spawn_hud_popup: bool = True):
+        self.scores.add_bonus(amount, spawn_hud_popup=spawn_hud_popup)
+
+    def spawn_collect_popup(self, pickup):
+        """World-space "+n" at the pickup. Idle and play both show it."""
+        if pickup.kind != COIN:
+            return
+        x = pickup.x + pickup.size * 0.5
+        y = pickup.y + pickup.size
+        self.scores.add_world_popup(self.config.items.coin_score, x, y)
 
     def grant_invincibility(self, seconds: float):
         """Reserved. Turns the bird hitbox off for a while."""
@@ -144,14 +153,17 @@ class Game:
             self.scroll_x += self.pipe_speed() * dt
 
         if self.mode == Mode.IDLE:
-            # No pickups here on purpose: the idle number is the wall clock,
-            # and bonus score would make the displayed time a lie.
+            # Pickups spawn for spectacle. Collecting them must not touch
+            # score (the HUD is the wall clock) but still shows a world "+n".
             self.scores.tick_idle(dt)
             flap_held = self._pilot.should_hold_flap(
                 self.bird, self.pipes, self.pipe_speed()
             )
             self.bird.update(dt, flap_held=flap_held, dying=False)
             self.pipes.update(dt, self.pipe_speed(), idle=True)
+            self.pickups.update(dt, self.pipe_speed(), pipes=self.pipes)
+            for pickup in self.pickups.take(self.bird):
+                self.spawn_collect_popup(pickup)
             return
 
         if self.mode == Mode.PLAY:
@@ -162,6 +174,7 @@ class Game:
             self.pipes.update(dt, self.pipe_speed(), idle=False)
             self.pickups.update(dt, self.pipe_speed(), pipes=self.pipes)
             for pickup in self.pickups.take(self.bird):
+                self.spawn_collect_popup(pickup)
                 pickup.apply(self)
             if self.config.bounds_kill and self.bird.is_off_screen():
                 self._begin_death()

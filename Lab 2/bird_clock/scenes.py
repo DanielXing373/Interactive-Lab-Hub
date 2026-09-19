@@ -1,12 +1,12 @@
 """Scenes: one art skin plus the spawn pool that goes with it.
 
 A scene is what the player sees as "spring" or "christmas": a folder of PNGs
-and a weight table over the seven collision shapes the engine can build. A
+and a weight table over the spawn kinds the engine can build. A
 weight of 0 means that shape never spawns, which is what keeps a scene from
 showing a greybox block for art nobody drew.
 
-Weights below are starting points keyed to the obstacles already on the asset
-list. They are meant to be edited once the art exists.
+Generic seasons share one lottery (the spring pool). A later pack may
+override (christmas already does). Missing PNGs still greybox.
 
 Scene choice, in order:
   1. a manual override (the idle cheat button, for filming)
@@ -18,14 +18,18 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Tuple
 
-# The seven shapes the spawner can build, as (shape, has_bottom, has_top).
+# Spawn kinds. The tuple is (collision shape, has_bottom, has_top). Vine and
+# the ceiling strip reuse rect geometry; PipePair.kind keeps them distinct
+# so hanging cherry and hanging vine can use different art.
 RECT_BOTH = "rect_both"
 RECT_BOTTOM = "rect_bottom"
 RECT_TOP = "rect_top"
 TRI_BOTH = "tri_both"
 TRI_BOTTOM = "tri_bottom"
 TRI_TOP = "tri_top"
+VINE = "vine"
 GROUND = "ground"
+GROUND_TOP = "ground_top"
 
 KIND_SHAPES: Dict[str, Tuple[str, bool, bool]] = {
     RECT_BOTH: ("rect", True, True),
@@ -34,12 +38,15 @@ KIND_SHAPES: Dict[str, Tuple[str, bool, bool]] = {
     TRI_BOTH: ("triangle", True, True),
     TRI_BOTTOM: ("triangle", True, False),
     TRI_TOP: ("triangle", False, True),
-    GROUND: ("ground", True, False),
+    VINE: ("rect", False, True),
+    GROUND: ("rect", True, False),
+    GROUND_TOP: ("rect", False, True),
 }
 
-# Only these may spawn while a ground strip runs under the spawn column: a
-# second floor solid would leave no corridor at all.
-TOP_ONLY_KINDS = (RECT_TOP, TRI_TOP)
+# Floor strip: only hanging solids. Ceiling strip: only standing solids.
+# Bilateral kinds and the other strip stay out so a corridor remains.
+TOP_ONLY_KINDS = (RECT_TOP, TRI_TOP, VINE)
+BOTTOM_ONLY_KINDS = (RECT_BOTTOM, TRI_BOTTOM)
 
 
 @dataclass(frozen=True)
@@ -53,37 +60,71 @@ class Scene:
     # Explicit (month, day) dates, for festivals. Checked before months.
     dates: Tuple[Tuple[int, int], ...] = ()
     # (min, max) seconds for this scene's ground strip. Empty uses the global
-    # PipeConfig range; Santa wants a much shorter run than a wheat field.
+    # PipeConfig range. Christmas keeps an explicit short Santa strip as the
+    # documented special case; generic seasons share the default.
     ground_seconds: Tuple[float, ...] = ()
+    # Left-edge spawn spacing. None = PipeConfig play / idle ranges.
+    # Summer is the documented exception: looser than the shared seasonal
+    # density so trees do not stack like the old caterpillar corridor.
+    min_spacing: Optional[float] = None
+    max_spacing: Optional[float] = None
+    idle_min_spacing: Optional[float] = None
+    idle_max_spacing: Optional[float] = None
 
     def weight(self, kind: str) -> float:
         return float(self.weights.get(kind, 0.0))
 
 
-# A "tree" is standing (rect_bottom) and hanging (rect_top). RECT_BOTH is
-# off: two-sided trees looked wrong. Zero stays zero until we turn it back on.
+# Trees stay single-sided from here on: standing or hanging, never a pair.
+# RECT_BOTH / TRI_BOTH stay at weight 0 on every seasonal / festival scene
+# (spring already did this; summer / autumn / winter / christmas / asian_games
+# follow the same rule). Greybox is the exception — it still rolls both-sides
+# so the engine can be tested without art.
 #
-# Skin.json already accepts `"file": ["a.png", "b.png"]`. Only the first file
-# is drawn today. Extra names are for later visual variants of the same slot.
+# One global seasonal lottery (the spring pool). Autumn / winter share this
+# table so spacing, speeds, entrance, and kinds stay one logic. Summer keeps
+# the same trees/vine but omits floor/ceiling strips (no caterpillar corridor)
+# and may set its own spacing. A later art pack may override further
+# (christmas already does). Vine hangs only. Floor/ceiling strips are the
+# rarest on scenes that still roll them. Missing PNGs still greybox.
+_SEASON_TREE = 0.6          # ×2 orientations = 1.2
+_SEASON_VINE = 0.65
+_SEASON_STRIP = 0.18        # ×2 orientations = 0.36
+_SEASON_WEIGHTS = {
+    RECT_BOTTOM: _SEASON_TREE, RECT_TOP: _SEASON_TREE,
+    TRI_BOTTOM: _SEASON_TREE, TRI_TOP: _SEASON_TREE,
+    VINE: _SEASON_VINE,
+    GROUND: _SEASON_STRIP, GROUND_TOP: _SEASON_STRIP,
+}
+# Summer: same trees/vine as the shared pool, no ground / ground_top strips.
+_SUMMER_WEIGHTS = {
+    RECT_BOTTOM: _SEASON_TREE, RECT_TOP: _SEASON_TREE,
+    TRI_BOTTOM: _SEASON_TREE, TRI_TOP: _SEASON_TREE,
+    VINE: _SEASON_VINE,
+}
 DEFAULT_SCENES: Tuple[Scene, ...] = (
     Scene(
         key="spring", label="Spring", skin="spring",
-        weights={RECT_TOP: 1.0, RECT_BOTTOM: 1.0, GROUND: 0.5},
+        weights=_SEASON_WEIGHTS,
         months=(3, 4, 5),
     ),
     Scene(
         key="summer", label="Summer", skin="summer",
-        weights={RECT_BOTTOM: 1.0, RECT_TOP: 0.7, TRI_BOTTOM: 0.8},
+        weights=_SUMMER_WEIGHTS,
         months=(6, 7, 8),
+        min_spacing=80.0,
+        max_spacing=108.0,
+        idle_min_spacing=76.0,
+        idle_max_spacing=100.0,
     ),
     Scene(
         key="autumn", label="Autumn", skin="autumn",
-        weights={RECT_BOTTOM: 1.0, RECT_TOP: 0.7, GROUND: 0.5},
+        weights=_SEASON_WEIGHTS,
         months=(9, 10, 11),
     ),
     Scene(
         key="winter", label="Winter", skin="winter",
-        weights={RECT_BOTTOM: 1.0, RECT_TOP: 0.7, TRI_BOTTOM: 0.8},
+        weights=_SEASON_WEIGHTS,
         months=(12, 1, 2),
     ),
     Scene(
@@ -108,7 +149,8 @@ DEFAULT_SCENES: Tuple[Scene, ...] = (
     ),
     Scene(
         key="asian_games", label="Asian Games", skin="asian_games",
-        weights={RECT_TOP: 1.0, RECT_BOTH: 0.8, RECT_BOTTOM: 0.5},
+        # RECT_BOTH was a tree pair; bilateral trees stay off.
+        weights={RECT_TOP: 1.0, RECT_BOTTOM: 0.5},
     ),
     # Every shape on, for checking the engine itself.
     Scene(

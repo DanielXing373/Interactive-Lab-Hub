@@ -1,33 +1,41 @@
 {
   "name": "spring",
   "background": "#BFE6F2",
-  "sky": "sky.png",
-  "far": "far.png",
-  "far_parallax": 0.35,
+  "sky": "bg_spring.png",
   "obstacles": {
     "rect_bottom": {
       "file": ["cherryblossom.png"],
       "stretch_start": 23,
-      "stretch_end": 32
+      "stretch_end": 32,
+      "hit_inset": 3
     },
     "rect_top": {
       "file": ["cherryblossom.png"],
       "flip_y": true,
       "stretch_start": 23,
-      "stretch_end": 32
+      "stretch_end": 32,
+      "hit_inset": 3
     },
     "tri_bottom": {
-      "file": ["hill.png"]
+      "file": ["pine.png"]
     },
     "tri_top": {
-      "file": ["hill_down.png"]
+      "file": ["pine.png"],
+      "flip_y": true
+    },
+    "vine": {
+      "file": ["vine.png"]
     },
     "ground": {
-      "file": ["caterpillar.png"]
+      "file": ["catepillar1.png", "catepillar2.png"]
+    },
+    "ground_top": {
+      "file": ["catepillar1.png", "catepillar2.png"],
+      "flip_y": true
     }
   },
   "pickup": {
-    "coin": ["butterfly.png"]
+    "coin": ["butterfly1.png", "butterfly2.png"]
   },
   "bird": "bird.png"
 }

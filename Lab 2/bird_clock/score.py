@@ -1,7 +1,8 @@
 """Scoreboard plus the "+1" popups that make the clock readable while playing.
 
-Idle ticks a fake clock-score; play current starts at 0. Every play gain
-(one per second, or a coin bonus) spawns a popup the renderer floats upward.
+Idle ticks a fake clock-score; play current starts at 0. Per-second gains
+spawn a HUD popup next to the seconds feather. Coin collects spawn a
+world-space "+N" at the pickup; play still adds the points.
 
 Later:
 - Drive idle_score from a real wall-clock
@@ -35,6 +36,15 @@ class ScorePopup:
         return f"+{self.amount}"
 
 
+class WorldPopup(ScorePopup):
+    """Same fade/rise as the HUD popup, anchored at a world (x, y)."""
+
+    def __init__(self, amount: int, lifetime: float, x: float, y: float):
+        super().__init__(amount, lifetime)
+        self.x = x
+        self.y = y
+
+
 class ScoreBoard:
     def __init__(self, config: GameConfig):
         self._cfg: ScoreConfig = config.score
@@ -45,19 +55,27 @@ class ScoreBoard:
         self._play_accum = 0.0
         self._last_wall_second = None
         self.popups: List[ScorePopup] = []
+        self.world_popups: List[WorldPopup] = []
 
     def reset_play(self):
         self.current_score = self._cfg.play_starts_at
         self._play_accum = 0.0
         self.popups.clear()
+        self.world_popups.clear()
+
+    def clear_world_popups(self):
+        self.world_popups.clear()
 
     def update(self, dt: float):
         """Age popups. Runs in every mode so they finish after a death."""
-        if not self.popups:
-            return
-        for popup in self.popups:
-            popup.age += dt
-        self.popups = [p for p in self.popups if p.alive]
+        if self.popups:
+            for popup in self.popups:
+                popup.age += dt
+            self.popups = [p for p in self.popups if p.alive]
+        if self.world_popups:
+            for popup in self.world_popups:
+                popup.age += dt
+            self.world_popups = [p for p in self.world_popups if p.alive]
 
     def _add_popup(self, amount: int):
         if amount <= 0:
@@ -84,10 +102,19 @@ class ScoreBoard:
             self._add_popup(step)
             self._play_accum -= 1.0
 
-    def add_bonus(self, amount: int):
-        """Reserved for coins."""
+    def add_world_popup(self, amount: int, x: float, y: float):
+        """Green "+n" at a world point. Does not change the score."""
+        if amount <= 0:
+            return
+        self.world_popups.append(
+            WorldPopup(amount, self._hud.popup_seconds, x, y)
+        )
+
+    def add_bonus(self, amount: int, spawn_hud_popup: bool = True):
+        """Reserved for coins. HUD popup is optional; world "+n" is separate."""
         self.current_score += amount
-        self._add_popup(amount)
+        if spawn_hud_popup:
+            self._add_popup(amount)
 
     def lock_best_from_current(self):
         if self.current_score > self.best_score:

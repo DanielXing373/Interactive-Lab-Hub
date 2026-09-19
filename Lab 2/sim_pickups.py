@@ -1,7 +1,8 @@
 """Headless checks for pickups.
 
 Rules under test:
-  - idle spawns no pickups at all, so the wall clock it shows cannot drift
+  - idle still spawns pickups for look, but eating one must not jump score
+    or the wall-clock HUD
   - play spawns them reachable (inside the corridor of every obstacle in
     their column) and eating one adds score
 """
@@ -55,14 +56,18 @@ def run_idle(seconds=300.0):
     deaths = 0
     max_alive = 0
     clock_jumps = 0
+    play_score_moved = 0
     step = game.config.score.points_per_second
 
     for _ in range(int(seconds / DT)):
         before = game.scores.idle_score
+        before_play = game.scores.current_score
         game.update(DT)
         # The idle number may only advance one tick; a bonus would jump it.
         if game.scores.idle_score - before > step:
             clock_jumps += 1
+        if game.scores.current_score != before_play:
+            play_score_moved += 1
         max_alive = max(max_alive, len(game.pickups.items))
         if game.is_dying:
             deaths += 1
@@ -71,6 +76,7 @@ def run_idle(seconds=300.0):
     return dict(
         spawned=counts["spawned"], eaten=counts["eaten"],
         max_alive=max_alive, deaths=deaths, clock_jumps=clock_jumps,
+        play_score_moved=play_score_moved,
     )
 
 
@@ -98,7 +104,7 @@ def run_play(seconds=120.0):
 
 
 def run_idle_after_play(seconds=20.0):
-    """Dying with pickups on screen must not leave any behind in idle."""
+    """Play pickups must clear on entering idle; idle may then spawn its own."""
     game = Game(GameConfig())
     game.enter_play()
     for i in range(int(60.0 / DT)):
@@ -108,11 +114,16 @@ def run_idle_after_play(seconds=20.0):
             break
     carried = len(game.pickups.items)
     game.enter_idle()
-    leftover = len(game.pickups.items)
+    leftover_at_enter = len(game.pickups.items)
+    spawned_in_idle = 0
     for _ in range(int(seconds / DT)):
         game.update(DT)
-        leftover = max(leftover, len(game.pickups.items))
-    return dict(on_screen_at_death=carried, leftover_in_idle=leftover)
+        spawned_in_idle = max(spawned_in_idle, len(game.pickups.items))
+    return dict(
+        on_screen_at_death=carried,
+        leftover_at_enter=leftover_at_enter,
+        spawned_in_idle=spawned_in_idle,
+    )
 
 
 def audit_entrance(seconds=300.0):
@@ -190,18 +201,20 @@ if __name__ == "__main__":
     print("entrance    ", enter)
 
     failures = []
-    if idle["spawned"] or idle["max_alive"]:
-        failures.append("pickups appeared in idle")
+    if not idle["spawned"] and not idle["max_alive"]:
+        failures.append("no pickups spawned in idle")
     if idle["clock_jumps"]:
         failures.append("idle clock jumped")
+    if idle["play_score_moved"]:
+        failures.append("idle pickup changed play score")
     if idle["deaths"]:
         failures.append("auto-pilot died")
     if play["unreachable"] or place["bad_placements"]:
         failures.append("pickup placed inside an obstacle")
     if play["eaten"] and not play["score_from_pickups"]:
         failures.append("eating a pickup gave no score")
-    if carry["leftover_in_idle"]:
-        failures.append("pickups survived into idle")
+    if carry["leftover_at_enter"]:
+        failures.append("play pickups survived into idle")
     if enter["reached_bird_while_animating"]:
         failures.append("obstacle still animating at the bird: lower enter_seconds")
     print("FAIL: " + "; ".join(failures) if failures else "all checks passed")

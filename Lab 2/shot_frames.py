@@ -1,6 +1,7 @@
 """Render play-mode frames to PNG so pickups can be eyeballed without the Pi.
 
-Play mode, because pickups never spawn in idle.
+Play mode so eating them shows the +N score popup. Idle also spawns pickups,
+but those are cosmetic.
 """
 
 import os

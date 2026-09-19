@@ -21,7 +21,9 @@ Scaling is cached because the Pi cannot afford to resize every frame.
 """
 
 import json
+import math
 import os
+import time
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -42,13 +44,23 @@ _DEFAULT_CAP_AT = {
 
 
 def _filenames(value) -> List[str]:
-    """`file` may be a string or a list. Only the first name is used today.
+    """`file` may be a string, a list, or a dict with a `file` key.
 
-    Extra names are reserved for later variants of the same slot (two sprouts,
-    two pyramids). Collision does not change when a second file appears.
+    Two list meanings, by slot — do not mix them:
+
+    * `rect_*` / `tri_*` / `vine`: spawn variants. The engine picks one name
+      per PipePair and passes it into obstacle(); extra names are not frames.
+    * Pickup lists and `ground` / `ground_top` strip lists: animation frames,
+      played in order. A pickup dict may also carry swing_degrees /
+      swing_seconds for a one-file rotate.
+
+    Collision does not change when a second file appears. Bird still uses the
+    first name.
     """
     if not value:
         return []
+    if isinstance(value, dict):
+        return _filenames(value.get("file"))
     if isinstance(value, (list, tuple)):
         return [name for name in value if name]
     return [value]
@@ -82,6 +94,7 @@ def _stretch_band(spec: dict, slot: str, img_h: int) -> Optional[Tuple[int, int]
 class SpriteSet:
     def __init__(self, config, skin: str):
         self._cfg = config.skin
+        self._items = config.items
         self._skin = skin
         self._screen = config.screen
         self._manifest: Dict = {}
@@ -158,27 +171,70 @@ class SpriteSet:
         names = _filenames(self._manifest.get("bird"))
         return self._fit("bird", names[0] if names else None, w, h)
 
-    def pickup(self, kind: str, size: int):
-        table = self._manifest.get("pickup") or {}
-        names = _filenames(table.get(kind))
-        return self._fit(f"pickup:{kind}", names[0] if names else None, size, size)
+    def pickup(self, kind: str, size: int, frame: int = 0, now: Optional[float] = None):
+        """Scaled pickup tile.
 
-    def obstacle(self, slot: str, w: int, h: int):
+        Multi-file lists stay a flipbook: `frame` indexes the skin.json name
+        list, wrapping. A one-file slot with swing_degrees > 0 adds a rotate
+        overlay about the image centre (nearest-neighbor, expand as needed).
+        """
+        table = self._manifest.get("pickup") or {}
+        spec = table.get(kind)
+        names = _filenames(spec)
+        if not names:
+            return None
+        filename = names[frame % len(names)]
+        img = self._fit(f"pickup:{kind}:{filename}", filename, size, size)
+        if img is None or len(names) != 1:
+            return img
+        return self._swing(img, spec, now)
+
+    def _pickup_swing(self, spec) -> Tuple[float, float]:
+        degrees = float(self._items.swing_degrees)
+        seconds = float(self._items.swing_seconds)
+        if isinstance(spec, dict):
+            if "swing_degrees" in spec:
+                degrees = float(spec["swing_degrees"])
+            if "swing_seconds" in spec:
+                seconds = float(spec["swing_seconds"])
+        return degrees, seconds
+
+    def _swing(self, img, spec, now: Optional[float]):
+        """Ping-pong rotate: 0 → +deg → 0 → −deg → 0 over swing_seconds."""
+        degrees, seconds = self._pickup_swing(spec)
+        if not degrees or seconds <= 0 or Image is None:
+            return img
+        t = time.monotonic() if now is None else now
+        angle = degrees * math.sin(2.0 * math.pi * t / seconds)
+        if abs(angle) < 1e-4:
+            return img
+        return img.rotate(angle, resample=Image.NEAREST, expand=True)
+
+    def obstacle(self, slot: str, w: int, h: int, filename: Optional[str] = None):
         """Sprite for one solid, scaled to the obstacle box.
 
+        `filename` is the variant the spawner picked from this slot's `file`
+        list. Missing / unknown names fall back to the first file (spring
+        cherry, one-item lists, greybox shot scripts). Ground/pickup lists
+        are not drawn here — they stay animation frames.
+
         Default is a uniform nearest-neighbor resize (keeps aspect because the
-        spawner sizes width from the PNG). The old vertical 3-slice path is
-        still here: set `"slice": true` plus stretch_start/stretch_end (or
-        legacy cap) on the slot to turn it back on.
+        spawner sizes width from the chosen PNG). The old vertical 3-slice
+        path is still here: set `"slice": true` plus stretch_start/stretch_end
+        (or legacy cap) on the slot to turn it back on.
         """
         spec = (self._manifest.get("obstacles") or {}).get(slot)
         if not spec or w <= 0 or h <= 0:
             return None
-        key = (slot, w, h, bool(spec.get("slice")))
+        names = _filenames(spec.get("file"))
+        if filename and filename in names:
+            chosen = filename
+        else:
+            chosen = names[0] if names else None
+        key = (slot, chosen, w, h, bool(spec.get("slice")))
         if key in self._cache:
             return self._cache[key]
-        names = _filenames(spec.get("file"))
-        img = self._open(names[0] if names else None)
+        img = self._open(chosen)
         if img is None:
             return self._store(key, None)
         # stretch_* is authored on the upright source. Flip the band with the
@@ -195,17 +251,37 @@ class SpriteSet:
             out = _three_slice(img, w, h, band[0], band[1])
         return self._store(key, out)
 
-    def ground_tile(self, h: int):
-        """Single tile scaled to the strip height; the renderer repeats it."""
-        spec = (self._manifest.get("obstacles") or {}).get("ground")
+    def ground_tile(self, h: int, frame: int = 0):
+        """Floor strip tile. Prefer strip_tile(slot, h) for ceiling strips."""
+        return self.strip_tile("ground", h, frame)
+
+    def strip_frame_count(self, slot: str) -> int:
+        spec = (self._manifest.get("obstacles") or {}).get(slot)
+        if not spec:
+            return 0
+        return len(_filenames(spec.get("file")))
+
+    def strip_tile(self, slot: str, h: int, frame: int = 0):
+        """Single tile scaled to the strip height; the renderer repeats it.
+
+        `frame` indexes the skin.json file list, wrapping — floor and ceiling
+        share the renderer's clock so a flipped strip stays in step.
+        """
+        spec = (self._manifest.get("obstacles") or {}).get(slot)
         if not spec or h <= 0:
             return None
         names = _filenames(spec.get("file"))
-        img = self._open(names[0] if names else None)
+        if not names:
+            return None
+        filename = names[frame % len(names)]
+        img = self._open(filename)
         if img is None:
             return None
-        key = ("ground", h)
+        flip = bool(spec.get("flip_y"))
+        key = (slot, filename, h, flip)
         if key not in self._cache:
+            if flip:
+                img = img.transpose(Image.FLIP_TOP_BOTTOM)
             scale = h / img.height
             w = max(1, int(round(img.width * scale)))
             self._cache[key] = img.resize((w, h), Image.NEAREST)

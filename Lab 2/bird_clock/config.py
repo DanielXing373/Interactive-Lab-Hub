@@ -64,12 +64,14 @@ class PipeConfig:
     # Random mix: bi/uni rect, bi/uni triangle, plus a long bottom ground strip.
     # Dense on purpose: ~4-5 columns fit on the 240px screen for spectacle.
     # Left-edge spacing ≈ this value; 240/55 ≈ 4.4 obstacles visible at once.
+    # A scene may override via Scene.min_spacing / max_spacing (and idle
+    # equivalents). Empty scene fields keep these defaults — spring does.
     min_spacing: float = 48.0
     max_spacing: float = 68.0
     min_width: float = 36.0
     max_width: float = 58.0
-    min_gap: float = 36.0
-    max_gap: float = 88.0
+    min_gap: float = 32.0
+    max_gap: float = 76.0
     # Idle is harder: pipes more often, gaps tighter (still >= bird + gap_over_bird).
     idle_min_spacing: float = 44.0
     idle_max_spacing: float = 62.0
@@ -79,28 +81,41 @@ class PipeConfig:
     gap_over_bird: float = 10.0
     edge_margin: float = 6.0
     # Single-sided solid height (rect or triangle apex).
-    uni_min_height: float = 28.0
-    uni_max_height: float = 72.0
-    # Continuous bottom bar lasting this many seconds at current scroll speed.
-    ground_min_seconds: float = 5.0
-    ground_max_seconds: float = 10.0
+    uni_min_height: float = 36.0
+    uni_max_height: float = 84.0
+    # Hanging vines are a thinner, shorter slot than the trees.
+    vine_min_height: float = 22.0
+    vine_max_height: float = 48.0
+    vine_min_width: float = 12.0
+    vine_max_width: float = 28.0
+    # Continuous bottom/ceiling bar lasting this many seconds at current
+    # scroll speed. One global default for every season; a scene may still
+    # override via Scene.ground_seconds (christmas Santa strip is the
+    # documented special case).
+    ground_min_seconds: float = 2.0
+    ground_max_seconds: float = 3.5
     ground_height: float = 18.0
+    # Total loop for floor/ceiling strip animation. Frame time is this / N
+    # files in skin.json. Two spring caterpillar frames therefore last 0.2s
+    # each; a one-file strip stays static. Floor and ceiling share one clock.
+    strip_anim_seconds: float = 0.4
     # Greybox entrance: solids stab in from the top / bottom edge once the
     # obstacle is fully past the right edge. Cosmetic only - collision and the
     # auto-pilot always use the final geometry, or the corridor would keep
     # shrinking after the pilot had already committed to it.
     # Headroom: an obstacle covers ~192px between entering and reaching the
     # bird, so even at play_max_speed there are ~3s before it matters.
-    enter_seconds: float = 0.75
+    enter_seconds: float = 0.62
     # How far past the seated position the stab punches, as a fraction of the
     # solid's height. 1.2 = 120%, 1.0 = plain slide with no recoil.
-    enter_peak: float = 1.13
+    enter_peak: float = 1.08
     # Extra pixels inside the right edge before the stab starts. Raising it
     # plays the animation further into frame, at the cost of the obstacle
     # being invisible while it waits.
     enter_margin_x: float = 0.0
-    # Spawn weights live per scene now, in scenes.py: a scene only rolls the
-    # shapes it has art for.
+    # Spawn weights live per scene now, in scenes.py. Generic seasons share
+    # the spring lottery; a later pack (christmas) may override. Spacing and
+    # play vs idle speed stay here — one global logic, two modes.
     # Retry distance when the scene had nothing legal to spawn.
     spawn_retry_spacing: float = 20.0
     idle_speed: float = 34.0
@@ -113,8 +128,9 @@ class PipeConfig:
 class ItemConfig:
     """Pickups. One box per item, triggers on overlap, never blocks flight.
 
-    Play mode only: the idle number is a real wall clock, and a pickup that
-    added score there would make the displayed time wrong.
+    Play and idle both spawn pickups. Idle collecting is cosmetic: world
+    "+n" at the sprite, but it must not add score or the wall-clock HUD
+    would lie.
 
     Seasonal art (butterfly, popsicle, maple leaf, ...) swaps by kind; the
     engine treats every kind the same except invincibility.
@@ -122,6 +138,10 @@ class ItemConfig:
 
     spawn_enabled: bool = True
     spawn_x: float = 240.0
+    # Scroll vs obstacles. Pickups spawn in the live corridor, then fly left
+    # faster than pipes so they read as chasing the bird. Relative x vs the
+    # spawn column is allowed to drift; auto-pilot is unchanged.
+    speed_mul: float = 1.4
     # Hitbox. Generous on purpose - difficulty is not the point here. It still
     # has to fit inside an obstacle gap, and past ~18 too many spawns get
     # skipped for want of room (6% skipped at 16, 10% at 22).
@@ -129,6 +149,14 @@ class ItemConfig:
     # Drawn size, centred on the hitbox. Free to overlap walls: the pickup
     # reads as a separate layer, and collision never uses this number.
     sprite_size: float = 26.0
+    # Seconds per pickup animation frame. A two-file list (spring butterfly)
+    # therefore loops in 0.5s. All on-screen pickups share one clock.
+    anim_frame_seconds: float = 0.25
+    # One-file pickups (summer popsicle) rotate about the image centre instead
+    # of flipping frames. Multi-file lists ignore these and stay a flipbook.
+    # skin.json pickup.<kind> may override per slot (set 0 to keep a still).
+    swing_degrees: float = 30.0
+    swing_seconds: float = 0.5
     min_spacing: float = 120.0
     max_spacing: float = 260.0
     # Retry sooner when the spawn column was blocked by an obstacle.
@@ -213,7 +241,7 @@ class HudConfig:
     best_margin_x: int = 4
     # Red feather in idle: month + day, no year.
     date_format: str = "%m/%d"
-    # "+1" popup right of the white feather: jump up, then vanish.
+    # "+1" HUD popup and world collect "+n": jump up, then vanish.
     popup_gap: int = 4
     popup_seconds: float = 0.7
     popup_rise: int = 9

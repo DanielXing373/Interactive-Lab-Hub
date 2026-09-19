@@ -24,17 +24,14 @@ def idle_run(scene, seconds=240.0):
     for _ in range(int(seconds / DT)):
         game.update(DT)
         for p in game.pipes.pipes:
-            # A ground strip is built as a bottom rect, so is_ground is the
-            # only way to tell the two apart.
-            seen.add("ground" if p.is_ground else (p.shape, p.has_bottom, p.has_top))
+            seen.add(p.kind or (
+                "ground" if p.is_ground else (p.shape, p.has_bottom, p.has_top)
+            ))
         if game.is_dying:
             deaths += 1
             game.enter_idle()
             game.pipes.set_pool(scene)
-    kinds = sorted(
-        [k for k, v in scenes.KIND_SHAPES.items() if k != "ground" and v in seen]
-        + (["ground"] if "ground" in seen else [])
-    )
+    kinds = sorted({k for k in seen if k})
     return deaths, kinds
 
 

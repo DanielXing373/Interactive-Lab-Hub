@@ -4,9 +4,9 @@ To the engine they are all one thing: a small box that triggers on overlap and
 never blocks flight (shape "拾取触发" in the asset table). Art swaps by kind,
 behaviour comes from ItemConfig.
 
-Placement is checked against the obstacles it will pass, so a pickup is always
-reachable: obstacles and pickups scroll at the same speed, so the relative x
-worked out at spawn time never changes.
+Placement is checked against the live corridor at spawn. After that pickups
+scroll faster than obstacles (ItemConfig.speed_mul), so relative x vs pipes
+is allowed to drift — they read as flying toward the bird.
 """
 
 import random
@@ -54,7 +54,7 @@ class Pickup:
         if self.kind == INVINCIBLE:
             game.grant_invincibility(cfg.invincible_seconds)
         else:
-            game.add_bonus_score(cfg.coin_score)
+            game.add_bonus_score(cfg.coin_score, spawn_hud_popup=False)
 
 
 class PickupField:
@@ -71,14 +71,19 @@ class PickupField:
         self._distance_until_spawn = 0.0
 
     def update(self, dt: float, speed: float, pipes):
-        """Play mode only. Idle never calls this, so the clock cannot drift."""
+        """Scroll and spawn. Score is applied by the game, not here.
+
+        `speed` is the obstacle scroll. Pickups use ItemConfig.speed_mul times
+        that so they fly left faster than the corridor they spawned in.
+        """
+        pickup_speed = speed * self._cfg.speed_mul
         for item in self.items:
-            item.move(dt, speed)
+            item.move(dt, pickup_speed)
         self.items = [i for i in self.items if not i.is_off_left()]
         self._resolve_spawn_collisions(pipes)
         if not self._cfg.spawn_enabled:
             return
-        self._distance_until_spawn -= speed * dt
+        self._distance_until_spawn -= pickup_speed * dt
         if self._distance_until_spawn > 0:
             return
         self._spawn(pipes)

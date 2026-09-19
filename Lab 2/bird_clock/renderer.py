@@ -1,5 +1,7 @@
 """Draw world objects onto the 240x135 landscape buffer."""
 
+import time
+
 from PIL import ImageColor
 
 from . import clock_display
@@ -40,6 +42,7 @@ class Renderer:
         self._draw_pipes(game)
         self._draw_pickups(game)
         self._draw_bird(game)
+        self._draw_world_popups(game)
         self._draw_clock(game)
         self._draw_best(game)
         self._draw_hints(game)
@@ -93,13 +96,19 @@ class Renderer:
             if pipe.is_ground and pipe.has_bottom:
                 if self._draw_ground(pipe, h, drop):
                     continue
+            if pipe.is_ceiling and pipe.has_top:
+                if self._draw_ceiling(pipe, h, lift):
+                    continue
 
             tri = pipe.shape == "triangle"
             if pipe.has_bottom and pipe.gap_bottom > 0:
-                slot = "tri_bottom" if tri else "rect_bottom"
+                slot = pipe.bottom_slot or ("tri_bottom" if tri else "rect_bottom")
                 top_y = h - pipe.gap_bottom + drop
                 sprite = self._sprites.obstacle(
-                    slot, int(round(pipe.width)), int(round(pipe.gap_bottom))
+                    slot,
+                    int(round(pipe.width)),
+                    int(round(pipe.gap_bottom)),
+                    filename=pipe.bottom_file or None,
                 )
                 if not self._paste(sprite, x0, top_y):
                     if tri:
@@ -111,10 +120,13 @@ class Renderer:
                         draw.rectangle((x0, top_y, x1, h + drop), fill=color)
 
             if pipe.has_top and pipe.gap_top < h:
-                slot = "tri_top" if tri else "rect_top"
+                slot = pipe.top_slot or ("tri_top" if tri else "rect_top")
                 solid_h = h - pipe.gap_top
                 sprite = self._sprites.obstacle(
-                    slot, int(round(pipe.width)), int(round(solid_h))
+                    slot,
+                    int(round(pipe.width)),
+                    int(round(solid_h)),
+                    filename=pipe.top_file or None,
                 )
                 if not self._paste(sprite, x0, -lift):
                     if tri:
@@ -127,19 +139,43 @@ class Renderer:
 
     def _draw_ground(self, pipe, h: float, drop: float) -> bool:
         """Repeat the ground tile across the strip, clipped to the screen."""
-        tile = self._sprites.ground_tile(int(round(pipe.gap_bottom)))
+        tile = self._strip_tile("ground", int(round(pipe.gap_bottom)))
         if tile is None:
             return False
         top_y = h - pipe.gap_bottom + drop
-        x = pipe.x
-        end = min(pipe.x + pipe.width, self._display.width)
-        # Start on a tile boundary so the pattern does not crawl as it scrolls.
+        self._tile_strip(tile, pipe.x, pipe.width, top_y)
+        return True
+
+    def _draw_ceiling(self, pipe, h: float, lift: float) -> bool:
+        """Same tiling as the floor strip, hung from the top edge."""
+        solid_h = int(round(h - pipe.gap_top))
+        tile = self._strip_tile("ground_top", solid_h)
+        if tile is None:
+            return False
+        self._tile_strip(tile, pipe.x, pipe.width, -lift)
+        return True
+
+    def _strip_tile(self, slot: str, h: int):
+        """Time-based strip frame, same clock for floor and ceiling.
+
+        Loop length is PipeConfig.strip_anim_seconds; each file gets an equal
+        share (two frames → 0.2s each). Tiles across one strip stay in step.
+        """
+        n = self._sprites.strip_frame_count(slot)
+        loop = self._cfg.pipes.strip_anim_seconds
+        if n <= 0:
+            return None
+        frame_s = (loop / n) if loop > 0 else 0.0
+        frame = int(time.monotonic() / frame_s) if frame_s > 0 else 0
+        return self._sprites.strip_tile(slot, h, frame)
+
+    def _tile_strip(self, tile, x: float, width: float, top_y: float):
+        end = min(x + width, self._display.width)
         if x < 0:
             x += (-x // tile.width) * tile.width
         while x < end:
             self._paste(tile, x, top_y)
             x += tile.width
-        return True
 
     def _draw_pickups(self, game):
         """Drawn bigger than the hitbox and centred on it, so it may overlap
@@ -147,12 +183,18 @@ class Renderer:
         draw = self._display.draw
         h = self._display.height
         art = int(round(self._cfg.items.sprite_size))
+        period = self._cfg.items.anim_frame_seconds
+        frame = int(time.monotonic() / period) if period > 0 else 0
         for item in game.pickups.items:
             top = world_to_screen_y(item.y, h, item.size)
             cx = item.x + item.size / 2.0
             cy = top + item.size / 2.0
-            sprite = self._sprites.pickup(item.kind, art)
-            if self._paste(sprite, cx - art / 2.0, cy - art / 2.0):
+            sprite = self._sprites.pickup(item.kind, art, frame)
+            # Rotated (expand) tiles are larger than sprite_size; keep the
+            # pivot on the hitbox centre either way.
+            if sprite is not None and self._paste(
+                sprite, cx - sprite.width / 2.0, cy - sprite.height / 2.0
+            ):
                 continue
             r = art / 2.0
             color = (
@@ -224,6 +266,14 @@ class Renderer:
             x += self._text_width(text) + hud.group_gap
         self._draw_popups(game, x - hud.group_gap + hud.popup_gap, y)
 
+    def _popup_style(self, progress: float):
+        """Same green fade and hop the HUD "+n" uses."""
+        rise = self._hud.popup_rise * (1.0 - (1.0 - progress) ** 2)
+        base = ImageColor.getrgb(self._colors.score_popup)
+        bg = ImageColor.getrgb(self._colors.background)
+        color = tuple(int(b + (g - b) * progress) for b, g in zip(base, bg))
+        return rise, color
+
     def _draw_popups(self, game, x: int, y: int):
         """Green "+n" right of the seconds feather: jumps up, then vanishes."""
         popups = game.scores.popups
@@ -231,16 +281,24 @@ class Renderer:
             return
         draw = self._display.draw
         font = self._display.font
-        base = ImageColor.getrgb(self._colors.score_popup)
-        bg = ImageColor.getrgb(self._colors.background)
         for popup in popups:
-            p = popup.progress
-            # Fast hop out, slow settle, then fade into the background.
-            rise = self._hud.popup_rise * (1.0 - (1.0 - p) ** 2)
-            color = tuple(
-                int(b + (g - b) * p) for b, g in zip(base, bg)
-            )
+            rise, color = self._popup_style(popup.progress)
             draw.text((x, y - rise), popup.text, font=font, fill=color)
+
+    def _draw_world_popups(self, game):
+        """Green "+n" at the collected pickup, same look as the HUD popup."""
+        popups = game.scores.world_popups
+        if not popups:
+            return
+        draw = self._display.draw
+        font = self._display.font
+        h = self._display.height
+        for popup in popups:
+            rise, color = self._popup_style(popup.progress)
+            text = popup.text
+            x = popup.x - self._text_width(text) / 2.0
+            y = world_to_screen_y(popup.y, h, 0) - rise
+            draw.text((x, y), text, font=font, fill=color)
 
     def _draw_best(self, game):
         """Best run, top-right. The clock already carries the live score."""

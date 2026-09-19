@@ -1,0 +1,31 @@
+{
+  "name": "summer",
+  "background": "#4EB4F0",
+  "sky": "bg_summer.png",
+  "obstacles": {
+    "rect_bottom": {
+      "file": ["thermometer.png"],
+      "size_mul": 0.55
+    },
+    "rect_top": {
+      "file": ["thermometer.png"],
+      "size_mul": 0.55
+    },
+    "tri_bottom": {
+      "file": ["pyramid1.png", "pyramid2.png"],
+      "size_mul": 1.5
+    },
+    "tri_top": {
+      "file": ["pyramid1.png", "pyramid2.png"],
+      "flip_y": true,
+      "size_mul": 1.5
+    }
+  },
+  "pickup": {
+    "coin": {
+      "file": "pop.png",
+      "swing_degrees": 30,
+      "swing_seconds": 0.5
+    }
+  }
+}
