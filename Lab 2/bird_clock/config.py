@@ -56,6 +56,12 @@ class BirdConfig:
     max_down_speed: float = -90.0
     # Death: extra downward accel so the bird leaves the screen.
     death_gravity: float = -220.0
+    # Shared flap flipbook in assets/pigeon/. Ping-pong 1-2-3-4-3-2 while vy>0.
+    art_folder: str = "pigeon"
+    frames: tuple = ("pigeon1.png", "pigeon2.png", "pigeon3.png", "pigeon4.png")
+    anim_frame_seconds: float = 0.09
+    # Uniform scale of the authored PNGs (not a stretch onto the hitbox).
+    sprite_scale: float = 0.67
 
 
 @dataclass(frozen=True)
@@ -189,11 +195,7 @@ class FloaterConfig:
 
 @dataclass(frozen=True)
 class ScoreConfig:
-    """Idle uses a fake ticking score for now.
-
-    Later: map a real wall-clock into this number, then render it in a
-    sexagesimal / fruit-token display instead of raw digits.
-    """
+    """Idle HUD is the wall clock. Play copies it at start, then ticks alone."""
 
     points_per_second: int = 1
     idle_starts_at: int = 0
@@ -252,9 +254,9 @@ class HudConfig:
     hint_top_y: int = 22
     # Button B sits low, near its physical position on the board.
     hint_bottom_y: int = 114
-    # Feather placeholder size; swap for a sprite later.
-    feather_w: int = 5
-    feather_h: int = 8
+    # Gem placeholder size; swap for a sprite later.
+    feather_w: int = 7
+    feather_h: int = 11
     feather_text_gap: int = 2
     group_gap: int = 5
     best_margin_x: int = 4
@@ -273,14 +275,18 @@ class ColorConfig:
     bird_outline: str = "#FFFFFF"
     pipe: str = "#3D9970"
     hud: str = "#FFFFFF"
+    # Clock digits: bright gold plus a dark stroke so they read on snow and night.
+    clock_text: str = "#FFE566"
+    clock_stroke: str = "#1A1208"
     hint: str = "#AAAAAA"
     death: str = "#FF6666"
-    # Feather clock: date / hour / minute / second.
-    feather_date: str = "#E4572E"
-    feather_hour: str = "#F2C14E"
-    feather_minute: str = "#4C9F70"
-    feather_second: str = "#F2F2F2"
-    score_popup: str = "#5CE08A"
+    # Gems: date = mean(red, orange, yellow); hour = mean(green, cyan);
+    # minute = blue; second = purple.
+    feather_date: str = "#FF8C00"
+    feather_hour: str = "#00FF80"
+    feather_minute: str = "#3D8BFF"
+    feather_second: str = "#C45CFF"
+    score_popup: str = "#FFE566"
     pickup: str = "#6FD3F2"
     pickup_invincible: str = "#C77DFF"
 
@@ -330,7 +336,7 @@ class GameConfig:
     bounds_kill: bool = False
     vertical_wrap: bool = True
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    font_size: int = 12
+    font_size: int = 13
 
 
 DEFAULT = GameConfig()

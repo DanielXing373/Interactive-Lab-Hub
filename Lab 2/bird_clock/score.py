@@ -1,18 +1,34 @@
 """Scoreboard plus the "+1" popups that make the clock readable while playing.
 
-Idle ticks a fake clock-score; play current starts at 0. Per-second gains
-spawn a HUD popup next to the seconds feather. Coin collects spawn a
-world-space "+N" at the pickup; play still adds the points.
+Idle shows the wall clock directly. Play copies that clock into the score
+at start, then ticks on game time (plus coins) so it can drift.
 
-Later:
-- Drive idle_score from a real wall-clock
-- Optionally vary rules by time of day (see config module docstring)
+Per-second gains spawn a HUD popup next to the seconds feather. Coin
+collects spawn a world-space "+N" at the pickup; play still adds the points.
 """
 
 import time
 from typing import List
 
+from .clock_display import (
+    HOURS_PER_DAY,
+    MINUTES_PER_HOUR,
+    SECONDS_PER_MINUTE,
+)
 from .config import GameConfig, HudConfig, ScoreConfig
+
+SECONDS_PER_DAY = SECONDS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY
+
+
+def wall_clock_score(now: float = None) -> int:
+    """Encode local time as the play score: day-of-month days + H:M:S."""
+    stamp = time.localtime(time.time() if now is None else now)
+    return (
+        int(stamp.tm_mday) * SECONDS_PER_DAY
+        + int(stamp.tm_hour) * SECONDS_PER_MINUTE * MINUTES_PER_HOUR
+        + int(stamp.tm_min) * SECONDS_PER_MINUTE
+        + int(stamp.tm_sec)
+    )
 
 
 class ScorePopup:
@@ -52,13 +68,16 @@ class ScoreBoard:
         self.idle_score = self._cfg.idle_starts_at
         self.current_score = self._cfg.play_starts_at
         self.best_score = 0
+        self._play_origin = 0
         self._play_accum = 0.0
         self._last_wall_second = None
         self.popups: List[ScorePopup] = []
         self.world_popups: List[WorldPopup] = []
 
     def reset_play(self):
-        self.current_score = self._cfg.play_starts_at
+        """Stamp the live wall clock, then count on game time from there."""
+        self.current_score = wall_clock_score()
+        self._play_origin = self.current_score
         self._play_accum = 0.0
         self.popups.clear()
         self.world_popups.clear()
@@ -117,5 +136,6 @@ class ScoreBoard:
             self._add_popup(amount)
 
     def lock_best_from_current(self):
-        if self.current_score > self.best_score:
-            self.best_score = self.current_score
+        earned = self.current_score - self._play_origin
+        if earned > self.best_score:
+            self.best_score = earned

@@ -2,10 +2,11 @@
 
 Two sources, one layout:
     idle  -> real wall clock, no arithmetic
-    play  -> the score, decomposed base 60 / 60 / 24 so coins just add points
+    play  -> start from that clock, then score ticks on game time
 
-Units are (key, text). Keys pick the feather sprite once art exists:
-    date = red, hour = gold, minute = green, second = white.
+Units are (key, text). Keys pick the gem colour:
+    date = mean(red, orange, yellow), hour = mean(green, cyan),
+    minute = blue, second = purple.
 Drawn glyphs are decoration only and never collide.
 """
 

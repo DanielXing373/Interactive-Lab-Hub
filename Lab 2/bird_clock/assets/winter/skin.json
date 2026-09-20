@@ -24,5 +24,12 @@
       "native": true,
       "size_mul": 2.0
     }
+  },
+  "pickup": {
+    "coin": {
+      "file": "snow_flake_00001_.png",
+      "swing_degrees": 30,
+      "swing_seconds": 1.2
+    }
   }
 }

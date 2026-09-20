@@ -119,6 +119,7 @@ class SpriteSet:
     def __init__(self, config, skin: str):
         self._cfg = config.skin
         self._items = config.items
+        self._bird_cfg = config.bird
         self._skin = skin
         self._screen = config.screen
         self._manifest: Dict = {}
@@ -191,9 +192,42 @@ class SpriteSet:
             self._cache[key] = img.resize((w, self._screen.height), Image.NEAREST)
         return self._cache[key]
 
-    def bird(self, w: int, h: int):
+    def bird(self, w: int, h: int, frame: int = 0):
+        """Pigeon flap frame at authored size, or the skin bird stretched to the hitbox."""
+        pigeon = self._pigeon(frame)
+        if pigeon is not None:
+            return pigeon
         names = _filenames(self._manifest.get("bird"))
         return self._fit("bird", names[0] if names else None, w, h)
+
+    def _pigeon(self, frame: int = 0):
+        """One flap PNG, never stretched onto the 8×8 hitbox."""
+        names = self._bird_cfg.frames or ()
+        if not names or Image is None:
+            return None
+        filename = names[int(frame) % len(names)]
+        scale = self._bird_cfg.sprite_scale
+        if scale <= 0:
+            scale = 1.0
+        key = ("pigeon", filename, round(scale, 4))
+        if key in self._cache:
+            return self._cache[key]
+        folder = os.path.join(
+            os.path.dirname(__file__), self._cfg.root, self._bird_cfg.art_folder
+        )
+        path = os.path.join(folder, filename)
+        img = None
+        try:
+            img = Image.open(path).convert("RGBA")
+            img.load()
+            if scale != 1.0:
+                w = max(1, int(round(img.width * scale)))
+                h = max(1, int(round(img.height * scale)))
+                img = img.resize((w, h), Image.NEAREST)
+        except (OSError, ValueError):
+            self.missing.append(filename)
+            img = None
+        return self._store(key, img)
 
     def pickup(self, kind: str, size: int, frame: int = 0, now: Optional[float] = None):
         """Scaled pickup tile.

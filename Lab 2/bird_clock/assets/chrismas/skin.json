@@ -31,5 +31,12 @@
   },
   "floater": {
     "file": ["text.png", "text2.png"]
+  },
+  "pickup": {
+    "coin": {
+      "file": "snow_flake_00001_.png",
+      "swing_degrees": 30,
+      "swing_seconds": 1.2
+    }
   }
 }

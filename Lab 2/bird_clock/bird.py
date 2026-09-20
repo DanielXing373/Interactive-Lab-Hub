@@ -16,6 +16,8 @@ class Bird:
         self.collision_enabled = True
         self.width = self._cfg.width
         self.height = self._cfg.height
+        self._ascending = False
+        self._ascent_age = 0.0
 
     def set_wrap_enabled(self, enabled: bool):
         self._wrap = bool(enabled) and self._wrap_allowed
@@ -26,6 +28,7 @@ class Bird:
         self.vy = 0.0
         self.collision_enabled = True
         self.set_wrap_enabled(True)
+        self._stop_ascent()
 
     def set_collision_enabled(self, enabled: bool):
         """Item / idle hook: turn hitbox on or off without touching physics."""
@@ -35,17 +38,46 @@ class Bird:
         if dying:
             self.vy += self._cfg.death_gravity * dt
             self.y += self.vy * dt
+            self._stop_ascent()
             return
 
         accel = self._cfg.flap_accel if flap_held else self._cfg.gravity
         self.vy += accel * dt
         self.vy = max(self._cfg.max_down_speed, min(self._cfg.max_up_speed, self.vy))
         self.y += self.vy * dt
+        self._update_ascent(dt)
 
         if self._wrap:
             self.y %= self._screen_h
             if self.y < 0:
                 self.y += self._screen_h
+
+    def _stop_ascent(self):
+        self._ascending = False
+        self._ascent_age = 0.0
+
+    def _update_ascent(self, dt: float):
+        """Wings flap only while rising; the next hop restarts 1-2-3-4-3-2."""
+        if self.vy > 0:
+            if not self._ascending:
+                self._ascent_age = 0.0
+            self._ascending = True
+            self._ascent_age += dt
+            return
+        self._stop_ascent()
+
+    @property
+    def wing_frame(self) -> int:
+        """0-based index into the four pigeon PNGs. Idle / falling = frame 0."""
+        if not self._ascending:
+            return 0
+        period = self._cfg.anim_frame_seconds
+        if period <= 0:
+            return 0
+        # 1-2-3-4-3-2, then the next step is 1 again (1234321 as a loop).
+        sequence = (0, 1, 2, 3, 2, 1)
+        idx = int(self._ascent_age / period) % len(sequence)
+        return sequence[idx]
 
     def segments(self):
         """World rectangles actually drawn. No wrap while falling off-screen."""

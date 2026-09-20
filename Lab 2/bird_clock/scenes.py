@@ -152,14 +152,12 @@ DEFAULT_SCENES: Tuple[Scene, ...] = (
         key="winter", label="Winter", skin="winter",
         weights=_WINTER_WEIGHTS,
         months=(12, 1, 2),
-        pickups=False,
         clock_month=12,
     ),
     Scene(
         key="christmas", label="Christmas", skin="chrismas",
         weights={RECT_BOTTOM: 1.2, RECT_TOP: 1.2, GROUND: 1.0},
         dates=((12, 24), (12, 25), (12, 26)),
-        pickups=False,
         floaters=True,
         clock_month=12,
         clock_day=25,
@@ -169,7 +167,10 @@ DEFAULT_SCENES: Tuple[Scene, ...] = (
     Scene(
         key="spring_festival", label="Spring Festival", skin="chinese_newyear",
         weights={RECT_TOP: 1.2, GROUND: 1.0},
+        dates=((2, 6),),
         floaters=True,
+        clock_month=2,
+        clock_day=6,
     ),
     Scene(
         key="anniversary", label="Anniversary", skin="anniversary",

@@ -318,17 +318,22 @@ class Renderer:
         fill = self._colors.death if game.is_dying else self._colors.bird
         outline = self._colors.bird_outline
         segments = bird.segments()
-        sprite = None if game.is_dying else self._sprites.bird(
-            int(round(bird.width)), int(round(bird.height))
+        sprite = self._sprites.bird(
+            int(round(bird.width)),
+            int(round(bird.height)),
+            frame=bird.wing_frame,
         )
         if sprite is not None:
             # Paste whole, not per wrap segment, so the art is never sliced.
             # Two segments means the bird straddles an edge, so draw the copy
             # on the far side too and let PIL clip both.
-            top = world_to_screen_y(bird.y, h, bird.height)
+            # Keep each flap PNG's authored size; centre it on the hitbox.
+            x = bird.x + (bird.width - sprite.width) / 2.0
+            bottom = bird.y + (bird.height - sprite.height) / 2.0
+            top = world_to_screen_y(bottom, h, sprite.height)
             offsets = (0, -h, h) if len(segments) > 1 else (0,)
             for dy in offsets:
-                self._paste(sprite, bird.x, top + dy)
+                self._paste(sprite, x, top + dy)
             return
         for x, y, w, bh in segments:
             top = world_to_screen_y(y, h, bh)
@@ -339,7 +344,7 @@ class Renderer:
             )
 
     def _feather(self, x: int, y: int, color: str):
-        """Placeholder feather: quill plus a leaf. Swap for a sprite later."""
+        """Placeholder gem: a small diamond with a dark edge so it pops."""
         draw = self._display.draw
         hud = self._hud
         w = hud.feather_w
@@ -352,44 +357,62 @@ class Renderer:
                 (x, y + h * 0.45),
             ],
             fill=color,
+            outline=self._colors.clock_stroke,
         )
-        draw.line((x + w / 2.0, y, x + w / 2.0, y + h), fill=color)
 
     def _draw_clock(self, game):
-        """Feather tokens for date / hour / minute / second, top-left."""
+        """Gem tokens for date / hour / minute / second, top-left."""
         draw = self._display.draw
         font = self._display.font
         hud = self._hud
         x = hud.margin_x
         y = hud.clock_y
         for key, text in clock_display.units_for(game, hud.date_format):
-            self._feather(x, y + 2, self._feather_colors[key])
+            self._feather(x, y + 1, self._feather_colors[key])
             x += hud.feather_w + hud.feather_text_gap
-            draw.text((x, y), text, font=font, fill=self._colors.hud)
+            draw.text(
+                (x, y),
+                text,
+                font=font,
+                fill=self._colors.clock_text,
+                stroke_width=1,
+                stroke_fill=self._colors.clock_stroke,
+            )
             x += self._text_width(text) + hud.group_gap
         self._draw_popups(game, x - hud.group_gap + hud.popup_gap, y)
 
     def _popup_style(self, progress: float):
-        """Same green fade and hop the HUD "+n" uses."""
+        """Gold fade and hop shared by HUD and world "+n"."""
         rise = self._hud.popup_rise * (1.0 - (1.0 - progress) ** 2)
-        base = ImageColor.getrgb(self._colors.score_popup)
+        fill = self._mix_to_bg(self._colors.score_popup, progress)
+        stroke = self._mix_to_bg(self._colors.clock_stroke, progress)
+        return rise, fill, stroke
+
+    def _mix_to_bg(self, color: str, progress: float):
+        base = ImageColor.getrgb(color)
         bg = ImageColor.getrgb(self._colors.background)
-        color = tuple(int(b + (g - b) * progress) for b, g in zip(base, bg))
-        return rise, color
+        return tuple(int(b + (g - b) * progress) for b, g in zip(base, bg))
 
     def _draw_popups(self, game, x: int, y: int):
-        """Green "+n" right of the seconds feather: jumps up, then vanishes."""
+        """Gold "+n" right of the seconds gem: jumps up, then vanishes."""
         popups = game.scores.popups
         if not popups:
             return
         draw = self._display.draw
         font = self._display.font
         for popup in popups:
-            rise, color = self._popup_style(popup.progress)
-            draw.text((x, y - rise), popup.text, font=font, fill=color)
+            rise, fill, stroke = self._popup_style(popup.progress)
+            draw.text(
+                (x, y - rise),
+                popup.text,
+                font=font,
+                fill=fill,
+                stroke_width=1,
+                stroke_fill=stroke,
+            )
 
     def _draw_world_popups(self, game):
-        """Green "+n" at the collected pickup, same look as the HUD popup."""
+        """Gold "+n" at the collected pickup, same look as the HUD popup."""
         popups = game.scores.world_popups
         if not popups:
             return
@@ -397,11 +420,18 @@ class Renderer:
         font = self._display.font
         h = self._display.height
         for popup in popups:
-            rise, color = self._popup_style(popup.progress)
+            rise, fill, stroke = self._popup_style(popup.progress)
             text = popup.text
             x = popup.x - self._text_width(text) / 2.0
             y = world_to_screen_y(popup.y, h, 0) - rise
-            draw.text((x, y), text, font=font, fill=color)
+            draw.text(
+                (x, y),
+                text,
+                font=font,
+                fill=fill,
+                stroke_width=1,
+                stroke_fill=stroke,
+            )
 
     def _draw_best(self, game):
         """Best run, top-right. The clock already carries the live score."""
