@@ -218,6 +218,9 @@ Part 2 idea: a Flappy Bird–style clock, not a literal digital or analog face.
 
 **Put the names of the people you gave feedback to here. (Even better, add links to their repos here!)**
 
+Xie Li, Pablo Penalba Lazaro
+
+
 # Lab 2 Part 2
 
 ## Prep 
@@ -260,6 +263,8 @@ After that, Git will ask you to login to your GitHub account to push the updates
 Do take advantage of having done the previous iteration to refine and simplify your design.
 
 ** Insert any updates ideas, sketches, [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf))!, storyboards for your ideas **
+
+I mainly updated the assets for the clock, for varies differentiations across seasons, days, and times. 
 
 
 \*\*\***Put a copy of your code in your Lab 2 Github repo.**\*\*\*
