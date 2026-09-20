@@ -11,7 +11,7 @@ It is worth spending a little time thinking about how you mark time, and what wo
 
 I used Cursor to help format this README and code scripts for the game.
 
-I used ChatGPT and ComfyUI for pixel art assets generation in the game, and the style referenced arts in Terraria, Stardew Valley, and Don't Starve Together.
+I used ChatGPT and ComfyUI for pixel art assets generation. The style referenced arts in Terraria, Stardew Valley, and Don't Starve Together.
 
 ## Prep
 
