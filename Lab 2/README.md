@@ -9,7 +9,8 @@ It is worth spending a little time thinking about how you mark time, and what wo
 
 **Please indicate anyone you collaborated with on this Lab here.**
 
-I used Cursor to help format this README and coding part of the game.
+I used Cursor to help format this README and code scripts for the game.
+
 I used ChatGPT and ComfyUI for pixel art assets generation in the game, and the style referenced arts in Terraria, Stardew Valley, and Don't Starve Together.
 
 ## Prep
@@ -241,6 +242,7 @@ Start small, pick just one element of your overall idea, just to show you have a
 \*\*\***Take a video of your barely modified PiClock.**\*\*\*
 
 Here is the link to the first draft of my modified PiClock:
+
 https://drive.google.com/file/d/1vcjME7mu8rtsmEIE-trI3QupxNE-bUOf/view?usp=sharing 
 
 After you edit and work on the scripts for Lab 2, the files should be upload back to your own GitHub repo! You can push to your personal github repo by adding the files here, commiting and pushing.
@@ -265,6 +267,7 @@ Do take advantage of having done the previous iteration to refine and simplify y
 \*\*\***Take a video of your PiClock.**\*\*\*
 
 Here is the link to the final draft of my PiCLock:
+
 https://drive.google.com/file/d/1xCnCsef2LvTUQ9oTn-VZEyyNrGVDSnL_/view?usp=sharing 
 
 As always, make sure you document contributions and ideas from others (and AI) explicitly in your writeup.
