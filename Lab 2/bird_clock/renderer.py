@@ -40,6 +40,7 @@ class Renderer:
         self._sprites = self._skin_for(game.scene.skin)
         self._draw_background(game)
         self._draw_pipes(game)
+        self._draw_floaters(game)
         self._draw_pickups(game)
         self._draw_bird(game)
         self._draw_world_popups(game)
@@ -104,13 +105,17 @@ class Renderer:
             if pipe.has_bottom and pipe.gap_bottom > 0:
                 slot = pipe.bottom_slot or ("tri_bottom" if tri else "rect_bottom")
                 top_y = h - pipe.gap_bottom + drop
-                sprite = self._sprites.obstacle(
+                if not self._draw_pipe_art(
+                    pipe,
                     slot,
+                    x0,
+                    top_y,
                     int(round(pipe.width)),
                     int(round(pipe.gap_bottom)),
-                    filename=pipe.bottom_file or None,
-                )
-                if not self._paste(sprite, x0, top_y):
+                    pipe.bottom_file,
+                    pipe.bottom_frames,
+                    getattr(pipe, "bottom_flip", None),
+                ):
                     if tri:
                         # World: base on floor, apex at gap_bottom.
                         draw.polygon(
@@ -122,13 +127,17 @@ class Renderer:
             if pipe.has_top and pipe.gap_top < h:
                 slot = pipe.top_slot or ("tri_top" if tri else "rect_top")
                 solid_h = h - pipe.gap_top
-                sprite = self._sprites.obstacle(
+                if not self._draw_pipe_art(
+                    pipe,
                     slot,
+                    x0,
+                    -lift,
                     int(round(pipe.width)),
                     int(round(solid_h)),
-                    filename=pipe.top_file or None,
-                )
-                if not self._paste(sprite, x0, -lift):
+                    pipe.top_file,
+                    pipe.top_frames,
+                    getattr(pipe, "top_flip", None),
+                ):
                     if tri:
                         draw.polygon(
                             [(x0, -lift), (x1, -lift), (mid, solid_h - lift)],
@@ -137,8 +146,73 @@ class Renderer:
                     else:
                         draw.rectangle((x0, -lift, x1, solid_h - lift), fill=color)
 
+    def _draw_pipe_art(
+        self,
+        pipe,
+        slot: str,
+        x0: float,
+        top_y: float,
+        box_w: int,
+        box_h: int,
+        filename: str,
+        frames,
+        flip_y,
+    ) -> bool:
+        """Paste one obstacle PNG. Flipbook frames keep their own aspect."""
+        keep_aspect = bool(frames) and len(frames) > 1
+        sprite = self._sprites.obstacle(
+            slot,
+            box_w,
+            box_h,
+            filename=self._obstacle_frame(
+                filename,
+                frames,
+                pipe.obstacle_frame_seconds,
+                getattr(pipe, "obstacle_anim_phase", 0.0),
+            ),
+            flip_y=flip_y,
+            keep_aspect=keep_aspect,
+        )
+        if sprite is None:
+            return False
+        x = x0
+        if keep_aspect:
+            x = x0 + (pipe.width - sprite.width) * 0.5
+        return self._paste(sprite, x, top_y)
+
+    def _obstacle_frame(
+        self,
+        filename,
+        frames,
+        seconds: float = 0.0,
+        phase: float = 0.0,
+    ):
+        """Current PNG for a still variant or a two-file obstacle flipbook."""
+        name = filename or None
+        if not frames or len(frames) < 2:
+            return name
+        period = seconds if seconds > 0 else 0.37
+        idx = int((time.monotonic() + phase) / period) % len(frames)
+        return frames[idx]
+
     def _draw_ground(self, pipe, h: float, drop: float) -> bool:
-        """Repeat the ground tile across the strip, clipped to the screen."""
+        """Floor strip: tile like the caterpillar, or one native PNG (mountain)."""
+        if self._sprites.slot_native("ground"):
+            sprite = self._sprites.native_strip(
+                "ground",
+                self._obstacle_frame(
+                    pipe.bottom_file,
+                    getattr(pipe, "bottom_frames", ()),
+                    getattr(pipe, "obstacle_frame_seconds", 0.0),
+                    getattr(pipe, "obstacle_anim_phase", 0.0),
+                ),
+                int(round(pipe.width)),
+                int(round(pipe.gap_bottom)),
+            )
+            if sprite is None:
+                return False
+            top_y = h - sprite.height + drop
+            return self._paste(sprite, pipe.x, top_y)
         tile = self._strip_tile("ground", int(round(pipe.gap_bottom)))
         if tile is None:
             return False
@@ -148,6 +222,21 @@ class Renderer:
 
     def _draw_ceiling(self, pipe, h: float, lift: float) -> bool:
         """Same tiling as the floor strip, hung from the top edge."""
+        if self._sprites.slot_native("ground_top"):
+            sprite = self._sprites.native_strip(
+                "ground_top",
+                self._obstacle_frame(
+                    pipe.top_file,
+                    getattr(pipe, "top_frames", ()),
+                    getattr(pipe, "obstacle_frame_seconds", 0.0),
+                    getattr(pipe, "obstacle_anim_phase", 0.0),
+                ),
+                int(round(pipe.width)),
+                int(round(h - pipe.gap_top)),
+            )
+            if sprite is None:
+                return False
+            return self._paste(sprite, pipe.x, -lift)
         solid_h = int(round(h - pipe.gap_top))
         tile = self._strip_tile("ground_top", solid_h)
         if tile is None:
@@ -176,6 +265,20 @@ class Renderer:
         while x < end:
             self._paste(tile, x, top_y)
             x += tile.width
+
+    def _draw_floaters(self, game):
+        """Banners: two-frame loop plus a small bob. Never collides."""
+        cfg = self._cfg.floaters
+        period = self._sprites.floater_frame_seconds() or cfg.anim_frame_seconds
+        frame = int(time.monotonic() / period) if period > 0 else 0
+        h = self._display.height
+        for item in game.floaters.items:
+            sprite = self._sprites.floater(frame)
+            if sprite is None:
+                continue
+            y = item.draw_y(cfg.bob_pixels, cfg.bob_seconds)
+            top = world_to_screen_y(y, h, sprite.height)
+            self._paste(sprite, item.x, top)
 
     def _draw_pickups(self, game):
         """Drawn bigger than the hitbox and centred on it, so it may overlap

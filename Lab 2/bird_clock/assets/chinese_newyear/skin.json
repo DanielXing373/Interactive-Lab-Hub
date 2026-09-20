@@ -1,0 +1,42 @@
+{
+  "name": "spring_festival",
+  "background": "#C41E3A",
+  "sky": "bg_newyear.png",
+  "obstacles": {
+    "rect_top": {
+      "file": [
+        {
+          "file": ["bianpao_00001_.png", "bianpao_00002_.png"],
+          "weight": 1.0,
+          "size_mul": 0.55,
+          "anim_seconds": [0.31, 0.37, 0.43, 0.47, 0.53, 0.61],
+          "flip_y": false
+        }
+      ]
+    },
+    "ground": {
+      "file": ["liondance_00001_.png", "liondance_00002_.png", "liondance_00003_.png"],
+      "native": true,
+      "size_mul": 1.5,
+      "anim_seconds": [0.18, 0.22, 0.26, 0.31]
+    },
+    "ground_top": {
+      "file": ["liondance_00001_.png", "liondance_00002_.png", "liondance_00003_.png"],
+      "native": true,
+      "flip_y": true,
+      "size_mul": 1.5,
+      "anim_seconds": [0.18, 0.22, 0.26, 0.31]
+    }
+  },
+  "pickup": {
+    "coin": {
+      "file": "redbag.png",
+      "swing_degrees": 30,
+      "swing_seconds": 0.8
+    }
+  },
+  "floater": {
+    "file": ["newyear_text.png", "newyear_text_00001_.png"],
+    "anim_seconds": 1.0
+  }
+}

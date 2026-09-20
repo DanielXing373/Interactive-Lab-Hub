@@ -5,6 +5,7 @@ from enum import Enum, auto
 from .auto_pilot import AutoPilot
 from .bird import Bird
 from .config import GameConfig
+from .floaters import FloaterField
 from .items import COIN, PickupField
 from .pipe import PipeField
 from .score import ScoreBoard
@@ -24,6 +25,7 @@ class Game:
         self.bird = Bird(config)
         self.pipes = PipeField(config)
         self.pickups = PickupField(config)
+        self.floaters = FloaterField(config)
         self.scores = ScoreBoard(config)
         self.scene_book = SceneBook(config)
         self.pipes.set_pool(self.scene_book.current)
@@ -75,6 +77,7 @@ class Game:
         self.bird.set_collision_enabled(False)
         self.pipes.clear()
         self.pickups.clear()
+        self.floaters.clear()
         self.scores.clear_world_popups()
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
@@ -85,6 +88,7 @@ class Game:
         self.bird.set_collision_enabled(True)
         self.pipes.clear()
         self.pickups.clear()
+        self.floaters.clear()
         self.scores.reset_play()
         self._play_elapsed = 0.0
         self._invincible_left = 0.0
@@ -99,6 +103,7 @@ class Game:
         self.pipes.set_pool(scene)
         self.pipes.clear()
         self.pickups.clear()
+        self.floaters.clear()
         return scene
 
     def add_bonus_score(self, amount: int, spawn_hud_popup: bool = True):
@@ -161,7 +166,13 @@ class Game:
             )
             self.bird.update(dt, flap_held=flap_held, dying=False)
             self.pipes.update(dt, self.pipe_speed(), idle=True)
-            self.pickups.update(dt, self.pipe_speed(), pipes=self.pipes)
+            self.pickups.update(
+                dt, self.pipe_speed(), pipes=self.pipes,
+                spawn=self.scene.pickups,
+            )
+            self.floaters.update(
+                dt, self.pipe_speed(), enabled=self.scene.floaters,
+            )
             for pickup in self.pickups.take(self.bird):
                 self.spawn_collect_popup(pickup)
             return
@@ -172,7 +183,13 @@ class Game:
             self._tick_invincibility(dt)
             self.bird.update(dt, flap_held=flap_held, dying=False)
             self.pipes.update(dt, self.pipe_speed(), idle=False)
-            self.pickups.update(dt, self.pipe_speed(), pipes=self.pipes)
+            self.pickups.update(
+                dt, self.pipe_speed(), pipes=self.pipes,
+                spawn=self.scene.pickups,
+            )
+            self.floaters.update(
+                dt, self.pipe_speed(), enabled=self.scene.floaters,
+            )
             for pickup in self.pickups.take(self.bird):
                 self.spawn_collect_popup(pickup)
                 pickup.apply(self)

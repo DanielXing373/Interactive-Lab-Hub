@@ -70,18 +70,19 @@ class PickupField:
         self.items.clear()
         self._distance_until_spawn = 0.0
 
-    def update(self, dt: float, speed: float, pipes):
+    def update(self, dt: float, speed: float, pipes, spawn: bool = True):
         """Scroll and spawn. Score is applied by the game, not here.
 
         `speed` is the obstacle scroll. Pickups use ItemConfig.speed_mul times
         that so they fly left faster than the corridor they spawned in.
+        `spawn` is False on scenes with no pickup art (winter).
         """
         pickup_speed = speed * self._cfg.speed_mul
         for item in self.items:
             item.move(dt, pickup_speed)
         self.items = [i for i in self.items if not i.is_off_left()]
         self._resolve_spawn_collisions(pipes)
-        if not self._cfg.spawn_enabled:
+        if not self._cfg.spawn_enabled or not spawn:
             return
         self._distance_until_spawn -= pickup_speed * dt
         if self._distance_until_spawn > 0:

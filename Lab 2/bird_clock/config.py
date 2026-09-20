@@ -172,6 +172,22 @@ class ItemConfig:
 
 
 @dataclass(frozen=True)
+class FloaterConfig:
+    """Non-interactive banners (christmas text). Not in the obstacle lottery."""
+
+    spawn_x: float = 240.0
+    interval_seconds: float = 10.0
+    speed_mul: float = 1.6
+    # Approximate art height, used only to keep the spawn band on-screen.
+    spawn_height: float = 30.0
+    cull_width: float = 160.0
+    edge_margin: float = 18.0
+    bob_pixels: float = 3.5
+    bob_seconds: float = 1.4
+    anim_frame_seconds: float = 0.4
+
+
+@dataclass(frozen=True)
 class ScoreConfig:
     """Idle uses a fake ticking score for now.
 
@@ -211,7 +227,10 @@ class AutoPilotConfig:
     crash_penalty: float = 1_000_000.0
     center_weight: float = 1.0
     exit_speed_weight: float = 0.02
-    skim_margin: float = 2.0
+    skim_margin: float = 4.0
+    # Treat solids as this many pixels taller in the idle search so a path
+    # that only grazes the authored top is rejected (round canopies).
+    solid_inflate: float = 3.0
 
 
 @dataclass(frozen=True)
@@ -298,6 +317,7 @@ class GameConfig:
     bird: BirdConfig = BirdConfig()
     pipes: PipeConfig = PipeConfig()
     items: ItemConfig = ItemConfig()
+    floaters: FloaterConfig = FloaterConfig()
     score: ScoreConfig = ScoreConfig()
     death: DeathConfig = DeathConfig()
     auto_pilot: AutoPilotConfig = AutoPilotConfig()

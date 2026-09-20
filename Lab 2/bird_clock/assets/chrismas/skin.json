@@ -1,0 +1,35 @@
+{
+  "name": "christmas",
+  "background": "#8EC4E8",
+  "sky": "bg_chrismas.png",
+  "obstacles": {
+    "rect_bottom": {
+      "file": [
+        {"file": "tree1.png", "weight": 1.0},
+        {"file": "tree2.png", "weight": 1.0}
+      ],
+      "size_mul": 0.72
+    },
+    "rect_top": {
+      "file": [
+        {"file": "tree1.png", "weight": 1.0, "flip_y": true},
+        {"file": "tree2.png", "weight": 1.0, "flip_y": true}
+      ],
+      "size_mul": 0.72
+    },
+    "ground": {
+      "file": ["santa_00001_.png", "santa_00002_.png", "santa_00003_.png"],
+      "native": true,
+      "anim_seconds": [0.18, 0.22, 0.26, 0.31]
+    },
+    "ground_top": {
+      "file": ["santa_00001_.png", "santa_00002_.png", "santa_00003_.png"],
+      "native": true,
+      "flip_y": true,
+      "anim_seconds": [0.18, 0.22, 0.26, 0.31]
+    }
+  },
+  "floater": {
+    "file": ["text.png", "text2.png"]
+  }
+}

@@ -43,13 +43,31 @@ _DEFAULT_CAP_AT = {
 }
 
 
+def _variant_art(spec: dict, filename: Optional[str]) -> dict:
+    """Per-file overlay from a slot's `file` list (slice, stretch_*, …)."""
+    if not spec or not filename:
+        return {}
+    raw = spec.get("file")
+    items = raw if isinstance(raw, (list, tuple)) else [raw]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("file")
+        if name == filename:
+            return item
+        if isinstance(name, (list, tuple)) and filename in name:
+            return item
+    return {}
+
+
 def _filenames(value) -> List[str]:
     """`file` may be a string, a list, or a dict with a `file` key.
 
     Two list meanings, by slot — do not mix them:
 
     * `rect_*` / `tri_*` / `vine`: spawn variants. The engine picks one name
-      per PipePair and passes it into obstacle(); extra names are not frames.
+      per PipePair and passes it into obstacle(); extra names are not frames
+      unless a variant dict sets `file` to a list (autumn windmill flipbook).
     * Pickup lists and `ground` / `ground_top` strip lists: animation frames,
       played in order. A pickup dict may also carry swing_degrees /
       swing_seconds for a one-file rotate.
@@ -62,7 +80,13 @@ def _filenames(value) -> List[str]:
     if isinstance(value, dict):
         return _filenames(value.get("file"))
     if isinstance(value, (list, tuple)):
-        return [name for name in value if name]
+        names = []
+        for item in value:
+            if isinstance(item, dict):
+                names.extend(_filenames(item.get("file")))
+            elif item:
+                names.append(item)
+        return names
     return [value]
 
 
@@ -184,10 +208,41 @@ class SpriteSet:
         if not names:
             return None
         filename = names[frame % len(names)]
-        img = self._fit(f"pickup:{kind}:{filename}", filename, size, size)
+        raw = self._open(filename)
+        if raw is None:
+            return None
+        scale = min(size / float(raw.width), size / float(raw.height))
+        dw = max(1, int(round(raw.width * scale)))
+        dh = max(1, int(round(raw.height * scale)))
+        img = self._fit(f"pickup:{kind}:{filename}", filename, dw, dh)
         if img is None or len(names) != 1:
             return img
         return self._swing(img, spec, now)
+
+    def floater(self, frame: int = 0):
+        """Native-size banner frame. Missing skin key → None (no greybox)."""
+        spec = self._manifest.get("floater")
+        names = _filenames(spec)
+        if not names:
+            return None
+        filename = names[frame % len(names)]
+        return self._open(filename)
+
+    def floater_frame_seconds(self) -> float:
+        """Seconds per banner frame. 0 = use FloaterConfig.anim_frame_seconds."""
+        spec = self._manifest.get("floater")
+        if not isinstance(spec, dict):
+            return 0.0
+        raw = spec.get("anim_seconds")
+        if raw is None:
+            return 0.0
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else 0.0
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return 0.0
+        return value if value > 0 else 0.0
 
     def _pickup_swing(self, spec) -> Tuple[float, float]:
         degrees = float(self._items.swing_degrees)
@@ -210,7 +265,15 @@ class SpriteSet:
             return img
         return img.rotate(angle, resample=Image.NEAREST, expand=True)
 
-    def obstacle(self, slot: str, w: int, h: int, filename: Optional[str] = None):
+    def obstacle(
+        self,
+        slot: str,
+        w: int,
+        h: int,
+        filename: Optional[str] = None,
+        flip_y: Optional[bool] = None,
+        keep_aspect: bool = False,
+    ):
         """Sprite for one solid, scaled to the obstacle box.
 
         `filename` is the variant the spawner picked from this slot's `file`
@@ -218,10 +281,12 @@ class SpriteSet:
         cherry, one-item lists, greybox shot scripts). Ground/pickup lists
         are not drawn here — they stay animation frames.
 
-        Default is a uniform nearest-neighbor resize (keeps aspect because the
-        spawner sizes width from the chosen PNG). The old vertical 3-slice
-        path is still here: set `"slice": true` plus stretch_start/stretch_end
-        (or legacy cap) on the slot to turn it back on.
+        Default stretches to (w, h). Flipbook frames pass keep_aspect so each
+        PNG keeps its own width (windmill sails) instead of matching the
+        collision box. Height still matches the solid.
+
+        The old vertical 3-slice path is still here: set `"slice": true` plus
+        stretch_start/stretch_end (or legacy cap) on the slot to turn it back on.
         """
         spec = (self._manifest.get("obstacles") or {}).get(slot)
         if not spec or w <= 0 or h <= 0:
@@ -231,7 +296,21 @@ class SpriteSet:
             chosen = filename
         else:
             chosen = names[0] if names else None
-        key = (slot, chosen, w, h, bool(spec.get("slice")))
+        do_flip = spec.get("flip_y") if flip_y is None else flip_y
+        overlay = _variant_art(spec, chosen)
+        merged = {**spec, **overlay}
+        slice_on = bool(merged.get("slice")) and not keep_aspect
+        key = (
+            slot,
+            chosen,
+            w,
+            h,
+            slice_on,
+            bool(do_flip),
+            keep_aspect,
+            merged.get("stretch_start"),
+            merged.get("stretch_end"),
+        )
         if key in self._cache:
             return self._cache[key]
         img = self._open(chosen)
@@ -239,13 +318,16 @@ class SpriteSet:
             return self._store(key, None)
         # stretch_* is authored on the upright source. Flip the band with the
         # image so hanging trees can reuse the same numbers as standing ones.
-        band = _stretch_band(spec, slot, img.height) if spec.get("slice") else None
-        if spec.get("flip_y"):
+        band = _stretch_band(merged, slot, img.height) if slice_on else None
+        if do_flip:
             img = img.transpose(Image.FLIP_TOP_BOTTOM)
             if band is not None:
                 start, end = band
                 band = (img.height - end, img.height - start)
-        if band is None:
+        if keep_aspect and img.height > 0:
+            draw_w = max(1, int(round(h * img.width / float(img.height))))
+            out = img.resize((draw_w, h), Image.NEAREST)
+        elif band is None:
             out = img.resize((w, h), Image.NEAREST)
         else:
             out = _three_slice(img, w, h, band[0], band[1])
@@ -260,6 +342,38 @@ class SpriteSet:
         if not spec:
             return 0
         return len(_filenames(spec.get("file")))
+
+    def slot_native(self, slot: str) -> bool:
+        spec = (self._manifest.get("obstacles") or {}).get(slot) or {}
+        return bool(spec.get("native"))
+
+    def native_strip(
+        self,
+        slot: str,
+        filename: Optional[str] = None,
+        w: int = 0,
+        h: int = 0,
+    ):
+        """One PNG, optionally resized as a whole to the solid box. Never tiled."""
+        spec = (self._manifest.get("obstacles") or {}).get(slot)
+        if not spec:
+            return None
+        names = _filenames(spec.get("file"))
+        if not names:
+            return None
+        chosen = filename if filename and filename in names else names[0]
+        flip = bool(spec.get("flip_y"))
+        key = (slot, chosen, "native", flip, int(w), int(h))
+        if key in self._cache:
+            return self._cache[key]
+        img = self._open(chosen)
+        if img is None:
+            return self._store(key, None)
+        if flip:
+            img = img.transpose(Image.FLIP_TOP_BOTTOM)
+        if w > 0 and h > 0 and (img.width != w or img.height != h):
+            img = img.resize((w, h), Image.NEAREST)
+        return self._store(key, img)
 
     def strip_tile(self, slot: str, h: int, frame: int = 0):
         """Single tile scaled to the strip height; the renderer repeats it.

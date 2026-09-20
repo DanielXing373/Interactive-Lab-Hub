@@ -40,10 +40,14 @@ class AutoPilot:
             return True
 
         greedy = self._greedy_target(bird, target)
-        snapshots = [
-            (p.x, p.width, p.gap_bottom, p.gap_top, p.shape, p.has_bottom, p.has_top)
-            for p in upcoming
-        ]
+        snapshots = []
+        for p in upcoming:
+            pad = getattr(p, "aim_pad", 0.0)
+            gap_b = p.gap_bottom + (pad if p.has_bottom else 0.0)
+            gap_t = p.gap_top - (pad if p.has_top else 0.0)
+            snapshots.append(
+                (p.x, p.width, gap_b, gap_t, p.shape, p.has_bottom, p.has_top)
+            )
         n = self._auto.chunks
         chunk_times = [self._auto.sim_dt] + [self._auto.chunk_seconds] * (n - 1)
 
@@ -217,6 +221,12 @@ class AutoPilot:
 
     def _hits_pipe(self, y, bird_x, bw, bh, pipe_x, pipe_w, gap_b, gap_t, shape, has_b, has_t) -> bool:
         h = self._screen.height
+        inflate = self._auto.solid_inflate
+        if inflate > 0:
+            if has_b:
+                gap_b = gap_b + inflate
+            if has_t:
+                gap_t = gap_t - inflate
         for bottom, top in wrap_y_spans(y, bh, h, self._wrap):
             box = (bird_x, bottom, bird_x + bw, top)
             if hits_pipe(box, pipe_x, pipe_w, gap_b, gap_t, h, shape, has_b, has_t):

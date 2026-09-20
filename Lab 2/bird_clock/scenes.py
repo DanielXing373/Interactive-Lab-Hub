@@ -70,6 +70,17 @@ class Scene:
     max_spacing: Optional[float] = None
     idle_min_spacing: Optional[float] = None
     idle_max_spacing: Optional[float] = None
+    # False skips coin spawn (winter / christmas have no pickup art yet).
+    pickups: bool = True
+    # Cosmetic right-to-left banners (christmas text). Not pickups.
+    floaters: bool = False
+    # Month shown on the idle HUD while the cheat button is cycling scenes.
+    # None keeps the real wall-clock date (boot, and festivals without a month).
+    clock_month: Optional[int] = None
+    # Optional day for a pinned festival date (christmas = 12/25).
+    clock_day: Optional[int] = None
+    # Idle B / flap steps through these. Lantern and Asian Games stay out.
+    in_cycle: bool = True
 
     def weight(self, kind: str) -> float:
         return float(self.weights.get(kind, 0.0))
@@ -81,12 +92,10 @@ class Scene:
 # follow the same rule). Greybox is the exception — it still rolls both-sides
 # so the engine can be tested without art.
 #
-# One global seasonal lottery (the spring pool). Autumn / winter share this
-# table so spacing, speeds, entrance, and kinds stay one logic. Summer keeps
-# the same trees/vine but omits floor/ceiling strips (no caterpillar corridor)
-# and may set its own spacing. A later art pack may override further
-# (christmas already does). Vine hangs only. Floor/ceiling strips are the
-# rarest on scenes that still roll them. Missing PNGs still greybox.
+# One global seasonal lottery (the spring pool). Winter still shares this
+# table. Summer and autumn omit vine / strips (no caterpillar corridor) and
+# keep their own obstacle mix. Christmas may override kinds/weights. Vine
+# hangs only. Missing PNGs still greybox.
 _SEASON_TREE = 0.6          # ×2 orientations = 1.2
 _SEASON_VINE = 0.65
 _SEASON_STRIP = 0.18        # ×2 orientations = 0.36
@@ -96,61 +105,82 @@ _SEASON_WEIGHTS = {
     VINE: _SEASON_VINE,
     GROUND: _SEASON_STRIP, GROUND_TOP: _SEASON_STRIP,
 }
-# Summer: same trees/vine as the shared pool, no ground / ground_top strips.
+# Summer: two trees (equal) > pyramids > thermometer. No vine, no strips.
 _SUMMER_WEIGHTS = {
-    RECT_BOTTOM: _SEASON_TREE, RECT_TOP: _SEASON_TREE,
-    TRI_BOTTOM: _SEASON_TREE, TRI_TOP: _SEASON_TREE,
-    VINE: _SEASON_VINE,
+    RECT_BOTTOM: 1.2, RECT_TOP: 1.2,
+    TRI_BOTTOM: 0.4, TRI_TOP: 0.4,
+}
+# Autumn: tree + windmill (equal, share RECT) and pine (TRI). No vine, no strips.
+_AUTUMN_WEIGHTS = {
+    RECT_BOTTOM: 1.2, RECT_TOP: 1.2,
+    TRI_BOTTOM: 0.6, TRI_TOP: 0.6,
+}
+# Winter: two trees + wheel (equal rects), snow mountain as one native floor
+# strip. No vine, no triangles, no ceiling strip.
+_WINTER_WEIGHTS = {
+    RECT_BOTTOM: 1.2, RECT_TOP: 1.2,
+    GROUND: 0.45,
 }
 DEFAULT_SCENES: Tuple[Scene, ...] = (
     Scene(
         key="spring", label="Spring", skin="spring",
         weights=_SEASON_WEIGHTS,
         months=(3, 4, 5),
+        clock_month=3,
     ),
     Scene(
         key="summer", label="Summer", skin="summer",
         weights=_SUMMER_WEIGHTS,
         months=(6, 7, 8),
+        clock_month=6,
         min_spacing=80.0,
         max_spacing=108.0,
         idle_min_spacing=76.0,
         idle_max_spacing=100.0,
     ),
     Scene(
-        key="autumn", label="Autumn", skin="autumn",
-        weights=_SEASON_WEIGHTS,
+        key="autumn", label="Autumn", skin="fall",
+        weights=_AUTUMN_WEIGHTS,
         months=(9, 10, 11),
+        clock_month=9,
+        min_spacing=60.0,
+        max_spacing=84.0,
+        idle_min_spacing=56.0,
+        idle_max_spacing=78.0,
     ),
     Scene(
         key="winter", label="Winter", skin="winter",
-        weights=_SEASON_WEIGHTS,
+        weights=_WINTER_WEIGHTS,
         months=(12, 1, 2),
+        pickups=False,
+        clock_month=12,
     ),
     Scene(
-        key="christmas", label="Christmas", skin="christmas",
-        weights={TRI_BOTTOM: 1.2, RECT_BOTTOM: 0.6, RECT_TOP: 0.6, GROUND: 0.6},
+        key="christmas", label="Christmas", skin="chrismas",
+        weights={RECT_BOTTOM: 1.2, RECT_TOP: 1.2, GROUND: 1.0},
         dates=((12, 24), (12, 25), (12, 26)),
-        ground_seconds=(2.0, 3.5),
+        pickups=False,
+        floaters=True,
+        clock_month=12,
+        clock_day=25,
     ),
     # Lunar dates are not computed; set them by hand each year or just pick
     # the scene with the cheat button.
     Scene(
-        key="spring_festival", label="Spring Festival", skin="spring_festival",
-        weights={RECT_TOP: 1.0, GROUND: 0.5},
-    ),
-    Scene(
-        key="lantern", label="Lantern Festival", skin="lantern",
-        weights={RECT_TOP: 1.2},
+        key="spring_festival", label="Spring Festival", skin="chinese_newyear",
+        weights={RECT_TOP: 1.2, GROUND: 1.0},
+        floaters=True,
     ),
     Scene(
         key="anniversary", label="Anniversary", skin="anniversary",
-        weights={RECT_BOTTOM: 1.0, RECT_TOP: 0.8},
-    ),
-    Scene(
-        key="asian_games", label="Asian Games", skin="asian_games",
-        # RECT_BOTH was a tree pair; bilateral trees stay off.
-        weights={RECT_TOP: 1.0, RECT_BOTTOM: 0.5},
+        weights={RECT_BOTTOM: 1.2, RECT_TOP: 1.2},
+        dates=((7, 8),),
+        clock_month=7,
+        clock_day=8,
+        min_spacing=64.0,
+        max_spacing=88.0,
+        idle_min_spacing=60.0,
+        idle_max_spacing=82.0,
     ),
     # Every shape on, for checking the engine itself.
     Scene(
@@ -207,9 +237,13 @@ class SceneBook:
         self._index = self.scenes.index(chosen)
 
     def next(self) -> Scene:
-        """Cheat button: step to the next scene and stop following the clock."""
+        """Cheat button: step to the next cycled scene and stop following the clock."""
         self._manual = True
-        self._index = (self._index + 1) % len(self.scenes)
+        n = len(self.scenes)
+        for _ in range(n):
+            self._index = (self._index + 1) % n
+            if self.current.in_cycle:
+                return self.current
         return self.current
 
     def select(self, key: str) -> Optional[Scene]:

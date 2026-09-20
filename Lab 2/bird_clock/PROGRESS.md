@@ -148,7 +148,7 @@ Example spring (live):
 - **One background image per skin.** Point `sky` at that PNG and omit `far` so the old sky+far split does not draw on top. Spring: `bg_spring.png`. Summer: `bg_summer.png`. Other skins can still use sky + far until they get a full plate.
 - Optional per-slot `"hit_inset"` (px per free side) shrinks **collision only**. Spawn width/height and the drawn sprite stay full size. Spring cherry uses `3` on `rect_bottom` / `rect_top`. Pine, vine, and caterpillar strips omit it (full-size hitbox). Auto-pilot still aims at the visual solid, so IDLE flies a few pixels clear of the art.
 - Missing files → greybox shapes; game must still run
-- `"file"` may be a string or a list. Obstacles/bird still use **only the first file** (extra names reserved for later variants). Pickup lists **and** `ground` / `ground_top` strip lists are animation frames, cycled in order (`time.monotonic()`, synced across the strip).
+- `"file"` may be a string, a list of names, or a list of `{file, weight, size_mul, flip_y}` dicts. `rect_*` / `tri_*` / `vine` lists are **weighted spawn variants**. Pickup and `ground` / `ground_top` lists are animation frames.
 - A pickup slot may also be an object: `{"file": "pop.png", "swing_degrees": 30, "swing_seconds": 0.5}`. One file + `swing_degrees` rotates at runtime (no second PNG). Two files stay a flipbook.
 
 **Do not** put art only under `bird_clock/*.png`. Always place under `assets/<skin>/` and reference from `skin.json`.
@@ -215,7 +215,7 @@ Desktop: map keys in `desktop.py` (see that file).
 - [ ] Pickup art per season (autumn onward still placeholders)
 - [ ] Bird sprite polish
 - [ ] Fixed-size obstacles (Christmas tree as non-stretched silhouette) — discussed, not implemented
-- [ ] Visual variants (`file` list random pick) — format reserved, not active
+- [x] Visual variants (`file` list random pick, optional per-file weight / size_mul / flip_y)
 - [ ] Re-enable `"slice": true` 3-slice if uniform stretch looks wrong on some assets
 - [ ] Full-screen FX (fireworks, poem drift) — tracker G04
 - [ ] Scene transitions — G05

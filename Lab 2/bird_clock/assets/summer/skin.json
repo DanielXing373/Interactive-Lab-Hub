@@ -4,12 +4,18 @@
   "sky": "bg_summer.png",
   "obstacles": {
     "rect_bottom": {
-      "file": ["thermometer.png"],
-      "size_mul": 0.55
+      "file": [
+        {"file": "tree1.png", "weight": 1.0},
+        {"file": "tree2.png", "weight": 1.0},
+        {"file": "thermometer.png", "weight": 0.4, "size_mul": 0.55}
+      ]
     },
     "rect_top": {
-      "file": ["thermometer.png"],
-      "size_mul": 0.55
+      "file": [
+        {"file": "tree1.png", "weight": 1.0, "flip_y": true},
+        {"file": "tree2.png", "weight": 1.0, "flip_y": true},
+        {"file": "thermometer.png", "weight": 0.4, "size_mul": 0.55, "flip_y": false}
+      ]
     },
     "tri_bottom": {
       "file": ["pyramid1.png", "pyramid2.png"],

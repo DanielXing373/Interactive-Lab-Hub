@@ -1,0 +1,26 @@
+{
+  "name": "anniversary",
+  "background": "#E8D5B5",
+  "sky": "bg_anni.png",
+  "obstacles": {
+    "rect_bottom": {
+      "file": [
+        {"file": "flower.png", "weight": 2.0},
+        {"file": "qbt.png", "weight": 1.0}
+      ]
+    },
+    "rect_top": {
+      "file": [
+        {"file": "flower.png", "weight": 2.0, "flip_y": true},
+        {"file": "qbt.png", "weight": 1.0, "flip_y": false}
+      ]
+    }
+  },
+  "pickup": {
+    "coin": {
+      "file": "ring.png",
+      "swing_degrees": 30,
+      "swing_seconds": 2.0
+    }
+  }
+}

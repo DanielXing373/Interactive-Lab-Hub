@@ -1,0 +1,55 @@
+{
+  "name": "autumn",
+  "background": "#4A90C8",
+  "sky": "fall_background.png",
+  "obstacles": {
+    "rect_bottom": {
+      "file": [
+        {
+          "file": "tree1.png",
+          "weight": 2.2,
+          "aim_pad": 6,
+          "hit_inset": 0
+        },
+        {
+          "file": ["windwheel1.png", "windwheel2.png"],
+          "weight": 1.0,
+          "anim_seconds": [0.31, 0.37, 0.43, 0.47, 0.53, 0.61],
+          "aim_pad": 3
+        }
+      ]
+    },
+    "rect_top": {
+      "file": [
+        {
+          "file": "tree1.png",
+          "weight": 2.2,
+          "flip_y": true,
+          "aim_pad": 6,
+          "hit_inset": 0
+        },
+        {
+          "file": ["windwheel1.png", "windwheel2.png"],
+          "weight": 1.0,
+          "anim_seconds": [0.31, 0.37, 0.43, 0.47, 0.53, 0.61],
+          "flip_y": true,
+          "aim_pad": 3
+        }
+      ]
+    },
+    "tri_bottom": {
+      "file": ["pine.png"]
+    },
+    "tri_top": {
+      "file": ["pine.png"],
+      "flip_y": true
+    }
+  },
+  "pickup": {
+    "coin": {
+      "file": "leaf.png",
+      "swing_degrees": 30,
+      "swing_seconds": 1.4
+    }
+  }
+}

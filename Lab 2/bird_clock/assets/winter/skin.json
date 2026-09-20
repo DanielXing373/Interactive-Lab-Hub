@@ -1,0 +1,28 @@
+{
+  "name": "winter",
+  "background": "#8EC4E8",
+  "sky": "winter_background.png",
+  "obstacles": {
+    "rect_bottom": {
+      "file": [
+        {"file": "tree1.png", "weight": 1.0},
+        {"file": "tree2.png", "weight": 1.0},
+        {"file": "winter_wheel.png", "weight": 1.0}
+      ],
+      "size_mul": 0.72
+    },
+    "rect_top": {
+      "file": [
+        {"file": "tree1.png", "weight": 1.0, "flip_y": true},
+        {"file": "tree2.png", "weight": 1.0, "flip_y": true},
+        {"file": "winter_wheel.png", "weight": 1.0, "flip_y": true}
+      ],
+      "size_mul": 0.72
+    },
+    "ground": {
+      "file": ["mountain.png"],
+      "native": true,
+      "size_mul": 2.0
+    }
+  }
+}
