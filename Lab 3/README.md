@@ -173,15 +173,18 @@ Storyboard and/or use a Verplank diagram to design a speech-enabled device. (Stu
 
 \*\***Post your storyboard and diagram here.**\*\*
 
+![Texas Hold'em storyboard](storyboard.png)
+
 Write out what you imagine the dialogue to be. Use cards, post-its, or whatever method helps you develop alternatives or group responses.
 
 \*\***Please describe and document your process.**\*\*
+
+I decide to make a pi that plays texas hold'em with users. It should identify poker cards, make moves, answer questions through verbal interaction and a camera. 
 
 Your script should include the pauses. Where does your device wait, and for how long? You now know from Part C that this is a parameter you have to choose, not something that happens for free.
 
 ## E. Acting out the dialogue
 
-![Texas Hold'em storyboard](storyboard.png)
 
 Find a partner, and *without sharing the script with your partner* try out the dialogue you've designed, where you (as the device designer) act as the device you are designing. Please record this interaction (for example, using Zoom's record feature).
 
