@@ -260,6 +260,8 @@ def match_card(qCard, train_ranks, train_suits):
     best_suit_match_diff = 10000
     best_rank_match_name = "Unknown"
     best_suit_match_name = "Unknown"
+    best_rank_name = "Unknown"
+    best_suit_name = "Unknown"
     i = 0
 
     # If no contours were found in query card in preprocess_card function,
@@ -300,7 +302,14 @@ def match_card(qCard, train_ranks, train_suits):
         best_suit_match_name = best_suit_name
 
     # Return the identiy of the card and the quality of the suit and rank match
-    return best_rank_match_name, best_suit_match_name, best_rank_match_diff, best_suit_match_diff
+    return (
+        best_rank_match_name,
+        best_suit_match_name,
+        best_rank_match_diff,
+        best_suit_match_diff,
+        best_rank_name,
+        best_suit_name,
+    )
     
     
 def draw_results(image, qCard):

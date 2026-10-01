@@ -245,7 +245,20 @@ def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
             cv2.drawContours(out, [contours[index]], -1, color, 2)
 
     labeled = card_vision.annotate_frame(out, detections or [])
-    names = [str(item.get("card", "?")) for item in (detections or [])]
+    names = []
+    for item in detections or []:
+        card_name = str(item.get("card", "?"))
+        if card_name != "Unknown":
+            names.append(card_name)
+            continue
+        guess = item.get("rank_guess")
+        if not guess:
+            names.append("Unknown")
+            continue
+        names.append(
+            "?%s of %s  r%s s%s"
+            % (guess, item.get("suit_guess", "?"), item.get("rank_diff", "?"), item.get("suit_diff", "?"))
+        )
     banner = "result: " + (", ".join(names) if names else "none")
     cv2.putText(
         labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA

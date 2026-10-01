@@ -177,7 +177,7 @@ def detect_cards(
                 continue
 
             qcard = Cards.preprocess_card(cnts_sort[i], image)
-            best_rank, best_suit, rank_diff, suit_diff = Cards.match_card(
+            best_rank, best_suit, rank_diff, suit_diff, rank_guess, suit_guess = Cards.match_card(
                 qcard, train_ranks, train_suits
             )
             card_str = format_card(best_rank, best_suit)
@@ -193,6 +193,8 @@ def detect_cards(
                     # Extra debug fields; safe for downstream to ignore
                     "rank": best_rank,
                     "suit": best_suit,
+                    "rank_guess": rank_guess,
+                    "suit_guess": suit_guess,
                     "rank_diff": int(rank_diff),
                     "suit_diff": int(suit_diff),
                 }
