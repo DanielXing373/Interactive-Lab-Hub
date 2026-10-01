@@ -225,16 +225,12 @@ def preprocess_card(contour, image):
     Qrank = query_thresh[20:185, 0:128]
     Qsuit = query_thresh[186:336, 0:128]
 
-    # Find rank contour and bounding rectangle, isolate and find largest contour
-    Qrank_cnts, hier = find_contours(Qrank, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    Qrank_cnts = sorted(Qrank_cnts, key=cv2.contourArea, reverse=True)
-
-    # Find bounding rectangle for largest contour, use it to resize query rank
-    # image to match dimensions of the train rank image
-    if len(Qrank_cnts) != 0:
-        x1,y1,w1,h1 = cv2.boundingRect(Qrank_cnts[0])
-        Qrank_roi = Qrank[y1:y1+h1, x1:x1+w1]
-        Qrank_sized = cv2.resize(Qrank_roi, (RANK_WIDTH,RANK_HEIGHT), 0, 0)
+    # External contours skip the hole inside 0, Q, 9, and 4.
+    # Ten keeps both digits when the second one is nearly as large as the first,
+    # so its shape is "10" rather than a lone 0 that looks like Q.
+    Qrank_cnts, hier = find_contours(Qrank, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    Qrank_sized = crop_glyphs(Qrank_cnts, Qrank, RANK_WIDTH, RANK_HEIGHT)
+    if Qrank_sized is not None:
         qCard.rank_img = Qrank_sized
 
     # Find suit contour and bounding rectangle, isolate and find largest contour
@@ -250,6 +246,26 @@ def preprocess_card(contour, image):
         qCard.suit_img = Qsuit_sized
 
     return qCard
+
+def crop_glyphs(contours, image, out_width, out_height, second_ratio=0.35, min_area=80):
+    """Resize one glyph, or two glyphs when both are large, as in a 10."""
+    ordered = sorted(contours, key=cv2.contourArea, reverse=True)
+    ordered = [contour for contour in ordered if cv2.contourArea(contour) >= min_area]
+    if len(ordered) == 0:
+        return None
+    keep = [ordered[0]]
+    largest = cv2.contourArea(ordered[0])
+    if len(ordered) > 1 and largest > 0 and cv2.contourArea(ordered[1]) >= second_ratio * largest:
+        keep.append(ordered[1])
+    stacked = keep[0] if len(keep) == 1 else np.vstack(keep)
+    x, y, width, height = cv2.boundingRect(stacked)
+    if width <= 0 or height <= 0:
+        return None
+    roi = image[y:y + height, x:x + width]
+    if roi.size == 0:
+        return None
+    return cv2.resize(roi, (out_width, out_height), 0, 0)
+
 
 def match_card(qCard, train_ranks, train_suits):
     """Finds best rank and suit matches for the query card. Differences

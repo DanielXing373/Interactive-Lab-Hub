@@ -151,8 +151,14 @@ def _local_ip() -> str:
         sock.close()
 
 
-def make_corner_panel(frame, min_area, max_area):
-    """Flatten the largest card and show the corner pixels used for recognition."""
+RANK_NAMES = (
+    "Ace", "Two", "Three", "Four", "Five", "Six", "Seven",
+    "Eight", "Nine", "Ten", "Jack", "Queen", "King",
+)
+
+
+def first_query_card(frame, min_area, max_area):
+    """Return the processed card for the largest accepted contour."""
     old_min, old_max = Cards.CARD_MIN_AREA, Cards.CARD_MAX_AREA
     if min_area is not None:
         Cards.CARD_MIN_AREA = int(min_area)
@@ -161,14 +167,39 @@ def make_corner_panel(frame, min_area, max_area):
     try:
         pre = Cards.preprocess_image(frame)
         contours, flags = Cards.find_cards(pre)
-        chosen = None
         for index, flag in enumerate(flags):
             if flag == 1:
-                chosen = contours[index]
-                break
-        if chosen is None:
+                return Cards.preprocess_card(contours[index], frame)
+        return None
+    except cv2.error:
+        return None
+    finally:
+        Cards.CARD_MIN_AREA = old_min
+        Cards.CARD_MAX_AREA = old_max
+
+
+def save_rank_sample(frame, rank_name, min_area, max_area, dest_dir) -> bool:
+    """Write this card's rank glyph over Card_Imgs/<Rank>.jpg."""
+    query = first_query_card(frame, min_area, max_area)
+    if query is None or len(query.rank_img) == 0:
+        print("No rank crop to save. Wait for a green outline.", flush=True)
+        return False
+    os.makedirs(dest_dir, exist_ok=True)
+    path = os.path.join(dest_dir, rank_name + ".jpg")
+    if not cv2.imwrite(path, query.rank_img):
+        print(f"Could not write {path}", flush=True)
+        return False
+    card_vision.clear_template_cache()
+    print(f"Saved {rank_name} template: {path}", flush=True)
+    return True
+
+
+def make_corner_panel(frame, min_area, max_area):
+    """Flatten the largest card and show the corner pixels used for recognition."""
+    try:
+        query = first_query_card(frame, min_area, max_area)
+        if query is None:
             return None
-        query = Cards.preprocess_card(chosen, frame)
         warp = query.warp
         if not hasattr(warp, "shape") or warp.size == 0:
             return None
@@ -201,9 +232,6 @@ def make_corner_panel(frame, min_area, max_area):
         return canvas
     except cv2.error:
         return None
-    finally:
-        Cards.CARD_MIN_AREA = old_min
-        Cards.CARD_MAX_AREA = old_max
 
 
 def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
@@ -393,23 +421,50 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, prev
         if buttons.b_pressed:
             print("Quit (button B).", flush=True)
             break
-        if buttons.mode == "keyboard" and _keyboard_quit():
-            print("Quit.", flush=True)
-            break
+        if buttons.mode == "keyboard":
+            command = _keyboard_command()
+            if command in ("q", "b", "quit", "exit"):
+                print("Quit.", flush=True)
+                break
+            if command == "s":
+                if not args.save_rank:
+                    print("Pass --save-rank Queen (or Jack, Ten) before typing s.", flush=True)
+                else:
+                    fresh = frame
+                    save_rank_sample(
+                        fresh,
+                        args.save_rank,
+                        args.min_area,
+                        args.max_area,
+                        template_directory(args),
+                    )
         time.sleep(0.02)
 
 
-def _keyboard_quit() -> bool:
+def _keyboard_command():
     if os.name == "nt":
         import msvcrt
         if not msvcrt.kbhit():
-            return False
-        return msvcrt.getwch().lower() in ("q", "b")
+            return None
+        return msvcrt.getwch().lower()
     import select
     readable, _, _ = select.select([sys.stdin], [], [], 0)
     if not readable:
-        return False
-    return sys.stdin.readline().strip().lower() in ("q", "b", "quit", "exit")
+        return None
+    return sys.stdin.readline().strip().lower()
+
+
+def template_directory(args) -> str:
+    if args.templates:
+        return args.templates
+    return os.path.join(os.path.dirname(os.path.abspath(card_vision.__file__)), "Card_Imgs")
+
+
+def canonical_rank(name: str):
+    for rank in RANK_NAMES:
+        if rank.lower() == name.lower():
+            return rank
+    return None
 
 
 def build_parser():
@@ -439,6 +494,11 @@ def build_parser():
     p.add_argument("--min-area", type=int, default=None)
     p.add_argument("--max-area", type=int, default=None)
     p.add_argument("--skip-unknown", action="store_true")
+    p.add_argument(
+        "--save-rank",
+        default=None,
+        help="Save the current card's rank glyph when you type s. Example: Queen",
+    )
     p.add_argument(
         "--flip",
         choices=("horizontal", "vertical", "both", "none"),
@@ -496,6 +556,15 @@ def main(argv=None):
     if args.interval <= 0:
         print("ERROR: --interval must be greater than 0.", file=sys.stderr)
         return 1
+    if args.save_rank:
+        rank_name = canonical_rank(args.save_rank)
+        if rank_name is None:
+            print(
+                "ERROR: --save-rank must be one of: " + ", ".join(RANK_NAMES),
+                file=sys.stderr,
+            )
+            return 1
+        args.save_rank = rank_name
 
     try:
         cap = card_vision.open_usb_camera(
@@ -517,6 +586,11 @@ def main(argv=None):
     card_vision.load_templates(args.templates)
     print(f"Output directory: {out_dir}", flush=True)
     print(f"Camera flip: {args.flip}", flush=True)
+    if args.save_rank:
+        print(
+            f"Hold a {args.save_rank}. Type s and press Enter to save its rank template.",
+            flush=True,
+        )
 
     recorder = None
     if args.record:

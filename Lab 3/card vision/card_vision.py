@@ -86,6 +86,14 @@ def format_card(rank_name: str, suit_name: str) -> str:
     return f"{rank_code}{suit_code}"
 
 
+def clear_template_cache() -> None:
+    """Drop loaded templates so a newly saved rank image is used immediately."""
+    global _train_ranks, _train_suits, _template_dir_loaded
+    _train_ranks = None
+    _train_suits = None
+    _template_dir_loaded = None
+
+
 def load_templates(template_dir: Optional[str] = None):
     """Load rank/suit train images. Defaults to ./Card_Imgs/."""
     global _train_ranks, _train_suits, _template_dir_loaded
