@@ -21,6 +21,7 @@ import threading
 import time
 
 import cv2
+import numpy as np
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import Cards
@@ -137,7 +138,62 @@ def _local_ip() -> str:
         sock.close()
 
 
-def overlay_frame(frame, detections, min_area, max_area):
+def make_corner_panel(frame, min_area, max_area):
+    """Flatten the largest card and show the corner pixels used for recognition."""
+    old_min, old_max = Cards.CARD_MIN_AREA, Cards.CARD_MAX_AREA
+    if min_area is not None:
+        Cards.CARD_MIN_AREA = int(min_area)
+    if max_area is not None:
+        Cards.CARD_MAX_AREA = int(max_area)
+    try:
+        pre = Cards.preprocess_image(frame)
+        contours, flags = Cards.find_cards(pre)
+        chosen = None
+        for index, flag in enumerate(flags):
+            if flag == 1:
+                chosen = contours[index]
+                break
+        if chosen is None:
+            return None
+        query = Cards.preprocess_card(chosen, frame)
+        warp = query.warp
+        if not hasattr(warp, "shape") or warp.size == 0:
+            return None
+        panel = cv2.cvtColor(warp, cv2.COLOR_GRAY2BGR)
+        cv2.rectangle(
+            panel,
+            (0, 0),
+            (Cards.CORNER_WIDTH - 1, Cards.CORNER_HEIGHT - 1),
+            (0, 0, 255),
+            1,
+        )
+        crop_ok = len(query.rank_img) != 0 and len(query.suit_img) != 0
+        note = "crop ok" if crop_ok else "crop empty"
+        cv2.putText(
+            panel,
+            note,
+            (4, 292),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (0, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        corner = warp[0:Cards.CORNER_HEIGHT, 0:Cards.CORNER_WIDTH]
+        corner_big = cv2.resize(corner, (128, 336), interpolation=cv2.INTER_NEAREST)
+        corner_bgr = cv2.cvtColor(corner_big, cv2.COLOR_GRAY2BGR)
+        canvas = np.zeros((336, 328, 3), dtype=np.uint8)
+        canvas[0:300, 0:200] = panel
+        canvas[:, 200:328] = corner_bgr
+        return canvas
+    except cv2.error:
+        return None
+    finally:
+        Cards.CARD_MIN_AREA = old_min
+        Cards.CARD_MAX_AREA = old_max
+
+
+def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
     """Draw the background mark, card-shaped contours, and the latest names."""
     out = frame.copy()
     height, width = out.shape[:2]
@@ -184,6 +240,12 @@ def overlay_frame(frame, detections, min_area, max_area):
     cv2.putText(
         labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA
     )
+    if corner_panel is not None:
+        panel_h, panel_w = corner_panel.shape[:2]
+        y0 = max(0, labeled.shape[0] - panel_h)
+        x1 = min(labeled.shape[1], panel_w)
+        h_fit = min(panel_h, labeled.shape[0] - y0)
+        labeled[y0:y0 + h_fit, 0:x1] = corner_panel[0:h_fit, 0:x1]
     return labeled
 
 
@@ -257,6 +319,7 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, prev
     interval = args.interval
     next_shot = time.monotonic()
     latest = []
+    corner_panel = None
     print(
         f"Recognizing every {interval:.1f}s. Quit with button B, q, or Ctrl-C.",
         flush=True,
@@ -281,10 +344,14 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, prev
                 if fresh is None:
                     fresh = frame
             latest = capture_and_recognize(fresh, out_dir, args)
+            if args.preview or args.show:
+                corner_panel = make_corner_panel(fresh, args.min_area, args.max_area)
 
         view = None
         if args.preview or args.show:
-            view = overlay_frame(frame, latest, args.min_area, args.max_area)
+            view = overlay_frame(
+                frame, latest, args.min_area, args.max_area, corner_panel=corner_panel
+            )
         if preview is not None and view is not None:
             preview.update(view)
 
