@@ -1,0 +1,3 @@
+# Card vision only. The speech lab venv does not need this.
+opencv-python
+numpy

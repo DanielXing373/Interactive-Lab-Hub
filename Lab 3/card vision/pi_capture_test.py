@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """
-Raspberry Pi Card Vision capture + test loop.
+Raspberry Pi card vision loop.
 
-Uses the course MiniPiTFT A/B buttons (same wiring as Interactive Lab Hub Lab 2):
-  Button A (top,    GPIO23) — capture USB webcam frame, save image, run recognition
-  Button B (bottom, GPIO24) — quit
+Opens the USB camera and recognizes cards on a timer. No button press is
+required to take a picture. Button B (GPIO24) or q still quits.
 
-Saved files land in ./captures/ so you can re-test later with:
-  python3 run_card_vision.py --image captures/<timestamp>.jpg
-
-Examples (run on the Pi):
   python3 pi_capture_test.py
-  python3 pi_capture_test.py --camera 0 --show
-  python3 pi_capture_test.py --keyboard          # no GPIO; press 'a' / 'q' in terminal
+  python3 pi_capture_test.py --interval 3 --camera 0
+  python3 pi_capture_test.py --keyboard --interval 3
 """
 
 from __future__ import annotations
@@ -57,7 +52,7 @@ class ButtonInputs:
                 self._b.switch_to_input(pull=digitalio.Pull.UP)
                 self.mode = "gpio"
                 print(
-                    f"GPIO buttons ready: A=D{gpio_a} (capture), B=D{gpio_b} (quit)",
+                    f"GPIO buttons: B=D{gpio_b} quits. Capture runs on a timer.",
                     flush=True,
                 )
             except Exception as exc:
@@ -69,10 +64,7 @@ class ButtonInputs:
                 )
 
         if self.mode == "keyboard":
-            print(
-                "Keyboard mode: press 'a' then Enter to capture, 'q' then Enter to quit.",
-                flush=True,
-            )
+            print("Keyboard mode: press q to quit. Capture runs on a timer.", flush=True)
 
     def _gpio_held(self, pin) -> bool:
         # Active-LOW with pull-up (pressed => False)
@@ -102,7 +94,7 @@ def ensure_dir(path: str) -> str:
 
 
 def capture_and_recognize(frame, out_dir: str, args) -> list:
-    """Save raw + annotated image, JSON result; return public detections."""
+    """Recognize one frame. Write files only when --save is set."""
     detections = card_vision.detect_cards(
         frame,
         template_dir=args.templates,
@@ -110,110 +102,78 @@ def capture_and_recognize(frame, out_dir: str, args) -> list:
         max_area=args.max_area,
         include_unknown=not args.skip_unknown,
     )
-    exported = card_vision.export_capture(
-        frame,
-        detections=detections,
-        out_dir=out_dir,
-        verbose=args.verbose,
-    )
-    result = exported["detections"]
-
-    print("=" * 50, flush=True)
-    print(f"Saved:      {exported['image']}", flush=True)
-    print(f"Annotated:  {exported['annotated']}", flush=True)
-    print(f"JSON:       {exported['json']}", flush=True)
-    print(json.dumps(result, indent=2), flush=True)
-    print("=" * 50, flush=True)
-    print("A = capture again | B = quit", flush=True)
-
-    return result
+    payload = {
+        "detections": card_vision.public_detections(detections, verbose=args.verbose),
+        "zones": card_vision.assign_zones(detections),
+    }
+    print(json.dumps(payload), flush=True)
+    if args.save:
+        exported = card_vision.export_capture(
+            frame,
+            detections=detections,
+            out_dir=out_dir,
+            verbose=args.verbose,
+        )
+        print(f"Saved: {exported['json']}", flush=True)
+    return payload["detections"]
 
 
 def grab_fresh_frame(cap, flush_reads: int = 5):
     """Discard a few buffered frames so the capture is recent."""
     return card_vision.grab_frame(cap, flush_reads=flush_reads)
 
-def run_gpio_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None):
-    print("Ready. Press A to capture+recognize, B to quit.", flush=True)
-    while True:
-        # Keep reading frames while recording (or showing preview)
-        preview = None
-        if recorder is not None or args.show:
-            ok, preview = cap.read()
-            if ok and preview is not None and recorder is not None:
-                recorder.write(preview)
 
-        if args.show and preview is not None:
-            cv2.imshow("Card Vision Pi (A=shot B=quit)", preview)
+def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None):
+    interval = args.interval
+    next_shot = time.monotonic()
+    print(
+        f"Recognizing every {interval:.1f}s. Quit with button B, q, or Ctrl-C.",
+        flush=True,
+    )
+    while True:
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            print("ERROR: camera read failed.", file=sys.stderr, flush=True)
+            time.sleep(0.2)
+            continue
+
+        if recorder is not None:
+            recorder.write(frame)
+
+        now = time.monotonic()
+        if now >= next_shot:
+            next_shot = now + interval
+            fresh = grab_fresh_frame(cap) or frame
+            capture_and_recognize(fresh, out_dir, args)
+
+        if args.show:
+            cv2.imshow("Card Vision Pi (q = quit)", frame)
             key = cv2.waitKey(1) & 0xFF
-            if key in (ord("a"), ord(" ")):
-                frame = grab_fresh_frame(cap)
-                if frame is not None:
-                    capture_and_recognize(frame, out_dir, args)
-            elif key in (ord("q"), ord("b")):
+            if key in (ord("q"), ord("b")):
+                print("Quit.", flush=True)
                 break
 
         buttons.poll()
-        if buttons.a_pressed:
-            frame = grab_fresh_frame(cap)
-            if frame is None:
-                print("ERROR: camera read failed.", file=sys.stderr, flush=True)
-            else:
-                capture_and_recognize(frame, out_dir, args)
-            time.sleep(0.2)
         if buttons.b_pressed:
             print("Quit (button B).", flush=True)
             break
-
-        if recorder is None and not args.show:
-            time.sleep(0.05)
-
-
-def run_keyboard_loop(cap, out_dir: str, args, recorder=None):
-    print("Type 'a' + Enter to capture, 'q' + Enter to quit.", flush=True)
-    while True:
-        if recorder is not None or args.show:
-            ok, preview = cap.read()
-            if ok and preview is not None and recorder is not None:
-                recorder.write(preview)
-            if args.show and preview is not None:
-                cv2.imshow("Card Vision Pi (a=shot q=quit)", preview)
-                key = cv2.waitKey(50) & 0xFF
-                if key in (ord("a"), ord(" ")):
-                    frame = grab_fresh_frame(cap)
-                    if frame is not None:
-                        capture_and_recognize(frame, out_dir, args)
-                    continue
-                if key in (ord("q"), ord("b")):
-                    break
-
-        # When recording without show, avoid blocking forever on input:
-        # only prompt when not recording, otherwise use a short select-style poll.
-        if recorder is not None and not args.show:
-            # Non-interactive friendly: check stdin without long block
-            import select
-
-            readable, _, _ = select.select([sys.stdin], [], [], 0.05)
-            if not readable:
-                continue
-            line = sys.stdin.readline().strip().lower()
-        else:
-            try:
-                line = input("> ").strip().lower()
-            except EOFError:
-                break
-
-        if line in ("a", "capture", "shot", "p"):
-            frame = grab_fresh_frame(cap)
-            if frame is None:
-                print("ERROR: camera read failed.", file=sys.stderr, flush=True)
-            else:
-                capture_and_recognize(frame, out_dir, args)
-        elif line in ("q", "quit", "b", "exit"):
+        if buttons.mode == "keyboard" and _keyboard_quit():
             print("Quit.", flush=True)
             break
-        elif line:
-            print("Commands: a = capture, q = quit", flush=True)
+        time.sleep(0.02)
+
+
+def _keyboard_quit() -> bool:
+    if os.name == "nt":
+        import msvcrt
+        if not msvcrt.kbhit():
+            return False
+        return msvcrt.getwch().lower() in ("q", "b")
+    import select
+    readable, _, _ = select.select([sys.stdin], [], [], 0)
+    if not readable:
+        return False
+    return sys.stdin.readline().strip().lower() in ("q", "b", "quit", "exit")
 
 
 def build_parser():
@@ -223,6 +183,17 @@ def build_parser():
     p.add_argument("--camera", type=int, default=0, help="USB camera index (default 0)")
     p.add_argument("--width", type=int, default=1280)
     p.add_argument("--height", type=int, default=720)
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=3.0,
+        help="Seconds between recognitions (default: 3)",
+    )
+    p.add_argument(
+        "--save",
+        action="store_true",
+        help="Write each recognition to ./captures as jpg and json",
+    )
     p.add_argument(
         "--out-dir",
         default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures"),
@@ -269,6 +240,10 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     out_dir = ensure_dir(args.out_dir)
 
+    if args.interval <= 0:
+        print("ERROR: --interval must be greater than 0.", file=sys.stderr)
+        return 1
+
     try:
         cap = card_vision.open_usb_camera(
             camera_index=args.camera,
@@ -302,10 +277,7 @@ def main(argv=None):
     buttons = ButtonInputs(use_gpio=use_gpio, gpio_a=args.gpio_a, gpio_b=args.gpio_b)
 
     try:
-        if buttons.mode == "gpio":
-            run_gpio_loop(cap, buttons, out_dir, args, recorder=recorder)
-        else:
-            run_keyboard_loop(cap, out_dir, args, recorder=recorder)
+        run_loop(cap, buttons, out_dir, args, recorder=recorder)
     except KeyboardInterrupt:
         print("\nInterrupted.", flush=True)
     finally:

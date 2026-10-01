@@ -5,8 +5,9 @@ CLI for the standalone Card Vision MVP.
 Examples:
   python run_card_vision.py --image path/to/photo.jpg
   python run_card_vision.py --image path/to/photo.jpg --show --save-annotated out.jpg
+  python run_card_vision.py --check-templates
   python run_card_vision.py --webcam
-  python run_card_vision.py --webcam --camera 1
+  python run_card_vision.py --webcam --camera 1 --interval 3
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 
 import cv2
 
@@ -45,7 +47,10 @@ def run_image(args):
         include_unknown=not args.skip_unknown,
     )
     result = public_result(detections, args.verbose)
-    print(json.dumps(result, indent=2))
+    print(json.dumps({
+        "detections": result,
+        "zones": card_vision.assign_zones(detections),
+    }, indent=2))
 
     annotated = draw_detections(image, detections)
     if args.save_annotated:
@@ -73,6 +78,16 @@ def run_image(args):
     return 0
 
 
+def run_check_templates(args):
+    ranks, suits = card_vision.load_templates(args.templates)
+    print(json.dumps({
+        "templates": args.templates or card_vision.DEFAULT_TEMPLATE_DIR,
+        "ranks": [item.name for item in ranks],
+        "suits": [item.name for item in suits],
+    }, indent=2))
+    return 0
+
+
 def run_webcam(args):
     try:
         cap = card_vision.open_usb_camera(
@@ -96,13 +111,17 @@ def run_webcam(args):
         )
         print(f"Recording session -> {recorder.path}", file=sys.stderr)
 
+    interval = args.interval
     print(
-        "Webcam mode. Press 'q' to quit, 's' to export snapshot"
+        f"Webcam mode. Recognizing every {interval:.1f}s. "
+        "Press 'q' to quit, 's' to export snapshot"
         + (", recording ON" if recorder else "")
         + ".",
         file=sys.stderr,
     )
 
+    next_shot = 0.0
+    detections = []
     try:
         while True:
             ok, frame = cap.read()
@@ -110,18 +129,21 @@ def run_webcam(args):
                 print("ERROR: failed to read frame from camera.", file=sys.stderr)
                 break
 
-            detections = card_vision.detect_cards(
-                frame,
-                template_dir=args.templates,
-                min_area=args.min_area,
-                max_area=args.max_area,
-                include_unknown=not args.skip_unknown,
-            )
-            result = public_result(detections, args.verbose)
-
-            # Print one JSON line per frame when cards are present (or always if verbose)
-            if detections or args.verbose:
-                print(json.dumps(result), flush=True)
+            now = time.monotonic()
+            if now >= next_shot:
+                next_shot = now + interval
+                detections = card_vision.detect_cards(
+                    frame,
+                    template_dir=args.templates,
+                    min_area=args.min_area,
+                    max_area=args.max_area,
+                    include_unknown=not args.skip_unknown,
+                )
+                result = public_result(detections, args.verbose)
+                print(json.dumps({
+                    "detections": result,
+                    "zones": card_vision.assign_zones(detections),
+                }), flush=True)
 
             if recorder is not None:
                 recorder.write(frame, detections=detections)
@@ -164,6 +186,11 @@ def build_parser():
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--image", help="Path to a static test image")
     mode.add_argument("--webcam", action="store_true", help="Use USB webcam")
+    mode.add_argument(
+        "--check-templates",
+        action="store_true",
+        help="Load Card_Imgs and print the rank and suit names",
+    )
 
     p.add_argument(
         "--templates",
@@ -178,6 +205,12 @@ def build_parser():
     )
     p.add_argument("--width", type=int, default=1280, help="Capture width")
     p.add_argument("--height", type=int, default=720, help="Capture height")
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=3.0,
+        help="Seconds between recognitions in --webcam (default: 3)",
+    )
     p.add_argument(
         "--min-area",
         type=int,
@@ -237,8 +270,13 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if args.check_templates:
+        return run_check_templates(args)
     if args.image:
         return run_image(args)
+    if args.interval <= 0:
+        print("ERROR: --interval must be greater than 0.", file=sys.stderr)
+        return 1
     return run_webcam(args)
 
 

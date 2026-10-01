@@ -65,6 +65,9 @@ SUIT_TO_CODE = {
 DEFAULT_TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "Card_Imgs"
 )
+# Card_Imgs/*.jpg are the rank and suit samples shipped with
+# EdjeElectronics/OpenCV-Playing-Card-Detector. They are the training images,
+# not a photo of a table.
 
 # Cached templates so callers can do repeated detect_cards(frame) cheaply
 _train_ranks = None
@@ -296,6 +299,29 @@ def public_detections(
     if verbose:
         return detections
     return [{"card": d["card"], "center": d["center"]} for d in detections]
+
+
+def assign_zones(detections: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Hold cards until table zones exist.
+
+    pi_hole, board, and ignored stay empty on purpose. Known cards go to
+    unassigned with their centers, so a later y-split can move them without
+    changing this shape. Unknown matches stay out of unassigned.
+    """
+    known: List[Dict[str, Any]] = []
+    unknown: List[Dict[str, Any]] = []
+    for det in public_detections(detections):
+        if det["card"] == "Unknown":
+            unknown.append(det)
+        else:
+            known.append(det)
+    return {
+        "pi_hole": [],
+        "board": [],
+        "ignored": [],
+        "unassigned": known,
+        "unknown": unknown,
+    }
 
 
 def export_capture(

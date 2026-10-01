@@ -132,7 +132,7 @@ def preprocess_image(image):
     # A background pixel in the center top of the image is sampled to determine
     # its intensity. The adaptive threshold is set at 50 (THRESH_ADDER) higher
     # than that. This allows the threshold to adapt to the lighting conditions.
-    img_w, img_h = np.shape(image)[:2]
+    img_h, img_w = np.shape(gray)[:2]
     bkg_level = gray[int(img_h/100)][int(img_w/2)]
     thresh_level = bkg_level + BKG_THRESH
 
