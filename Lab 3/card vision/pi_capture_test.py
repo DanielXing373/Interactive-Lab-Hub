@@ -143,7 +143,9 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None):
         now = time.monotonic()
         if now >= next_shot:
             next_shot = now + interval
-            fresh = grab_fresh_frame(cap) or frame
+            fresh = grab_fresh_frame(cap)
+            if fresh is None:
+                fresh = frame
             capture_and_recognize(fresh, out_dir, args)
 
         if args.show:
