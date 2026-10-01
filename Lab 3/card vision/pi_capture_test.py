@@ -127,6 +127,19 @@ def grab_fresh_frame(cap, flush_reads: int = 5):
     return card_vision.grab_frame(cap, flush_reads=flush_reads)
 
 
+def flip_frame(frame, mode: str):
+    """Undo a mirrored camera so the rank sits in the top-left corner."""
+    if frame is None or mode == "none":
+        return frame
+    if mode == "horizontal":
+        return cv2.flip(frame, 1)
+    if mode == "vertical":
+        return cv2.flip(frame, 0)
+    if mode == "both":
+        return cv2.flip(frame, -1)
+    return frame
+
+
 def _local_ip() -> str:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -330,6 +343,7 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, prev
             print("ERROR: camera read failed.", file=sys.stderr, flush=True)
             time.sleep(0.2)
             continue
+        frame = flip_frame(frame, args.flip)
 
         if recorder is not None:
             recorder.write(frame)
@@ -340,7 +354,7 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, prev
             if args.preview:
                 fresh = frame
             else:
-                fresh = grab_fresh_frame(cap)
+                fresh = flip_frame(grab_fresh_frame(cap), args.flip)
                 if fresh is None:
                     fresh = frame
             latest = capture_and_recognize(fresh, out_dir, args)
@@ -412,6 +426,12 @@ def build_parser():
     p.add_argument("--min-area", type=int, default=None)
     p.add_argument("--max-area", type=int, default=None)
     p.add_argument("--skip-unknown", action="store_true")
+    p.add_argument(
+        "--flip",
+        choices=("horizontal", "vertical", "both", "none"),
+        default="horizontal",
+        help="Flip the camera before recognition (default: horizontal, for a mirrored webcam)",
+    )
     p.add_argument("--verbose", action="store_true")
     p.add_argument(
         "--show",
@@ -483,6 +503,7 @@ def main(argv=None):
     grab_fresh_frame(cap, flush_reads=8)
     card_vision.load_templates(args.templates)
     print(f"Output directory: {out_dir}", flush=True)
+    print(f"Camera flip: {args.flip}", flush=True)
 
     recorder = None
     if args.record:
