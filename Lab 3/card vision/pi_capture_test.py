@@ -7,7 +7,7 @@ required to take a picture. Button B (GPIO24) or q still quits.
 
   python3 pi_capture_test.py
   python3 pi_capture_test.py --interval 3 --camera 0
-  python3 pi_capture_test.py --keyboard --interval 3
+  python3 pi_capture_test.py --keyboard --interval 1 --preview
 """
 
 from __future__ import annotations
@@ -15,13 +15,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import sys
+import threading
 import time
 
 import cv2
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import Cards
 import card_vision
-from run_card_vision import draw_detections
 
 
 # MiniPiTFT defaults from Interactive Lab Hub Lab 2
@@ -123,9 +126,137 @@ def grab_fresh_frame(cap, flush_reads: int = 5):
     return card_vision.grab_frame(cap, flush_reads=flush_reads)
 
 
-def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None):
+def _local_ip() -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        sock.close()
+
+
+def overlay_frame(frame, detections, min_area, max_area):
+    """Draw the background mark, card-shaped contours, and the latest names."""
+    out = frame.copy()
+    height, width = out.shape[:2]
+    mark_x, mark_y = width // 2, max(1, height // 100)
+    cv2.drawMarker(out, (mark_x, mark_y), (0, 0, 255), cv2.MARKER_CROSS, 40, 2)
+    cv2.putText(
+        out,
+        "keep empty",
+        (mark_x + 18, mark_y + 18),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 0, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+    lo = Cards.CARD_MIN_AREA if min_area is None else int(min_area)
+    hi = Cards.CARD_MAX_AREA if max_area is None else int(max_area)
+    thresh = Cards.preprocess_image(frame)
+    contours, hierarchy = Cards.find_contours(
+        thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+    )
+    if len(contours):
+        order = sorted(
+            range(len(contours)),
+            key=lambda i: cv2.contourArea(contours[i]),
+            reverse=True,
+        )[:5]
+        for index in order:
+            size = cv2.contourArea(contours[index])
+            peri = cv2.arcLength(contours[index], True)
+            corners = len(cv2.approxPolyDP(contours[index], 0.01 * peri, True))
+            parent = int(hierarchy[0][index][3])
+            accepted = lo < size < hi and parent == -1 and corners == 4
+            color = (0, 255, 0) if accepted else (0, 165, 255)
+            cv2.drawContours(out, [contours[index]], -1, color, 2)
+
+    labeled = card_vision.annotate_frame(out, detections or [])
+    names = [str(item.get("card", "?")) for item in (detections or [])]
+    banner = "result: " + (", ".join(names) if names else "none")
+    cv2.putText(
+        labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA
+    )
+    cv2.putText(
+        labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA
+    )
+    return labeled
+
+
+class BrowserPreview:
+    """Serve the latest annotated frame as a browser MJPEG stream."""
+
+    def __init__(self, port: int):
+        self.port = port
+        self._jpg = None
+        self._lock = threading.Lock()
+        self._httpd = None
+        self._thread = None
+
+    def update(self, frame) -> None:
+        ok, encoded = cv2.imencode(
+            ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60]
+        )
+        if not ok:
+            return
+        with self._lock:
+            self._jpg = encoded.tobytes()
+
+    def latest(self):
+        with self._lock:
+            return self._jpg
+
+    def start(self) -> str:
+        preview = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header(
+                    "Content-Type", "multipart/x-mixed-replace; boundary=frame"
+                )
+                self.end_headers()
+                try:
+                    while True:
+                        jpg = preview.latest()
+                        if jpg is None:
+                            time.sleep(0.05)
+                            continue
+                        self.wfile.write(
+                            b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
+                        )
+                        time.sleep(0.05)
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    return
+
+            def log_message(self, format, *args):
+                return
+
+        try:
+            self._httpd = ThreadingHTTPServer(("0.0.0.0", self.port), Handler)
+        except OSError as exc:
+            raise RuntimeError(
+                f"preview port {self.port} is in use ({exc}). "
+                "Stop the old preview.py with Ctrl-C, then run this again."
+            ) from exc
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._thread.start()
+        return f"http://{_local_ip()}:{self.port}"
+
+    def stop(self) -> None:
+        if self._httpd is not None:
+            self._httpd.shutdown()
+            self._httpd.server_close()
+
+
+def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None, preview=None):
     interval = args.interval
     next_shot = time.monotonic()
+    latest = []
     print(
         f"Recognizing every {interval:.1f}s. Quit with button B, q, or Ctrl-C.",
         flush=True,
@@ -143,13 +274,22 @@ def run_loop(cap, buttons: ButtonInputs, out_dir: str, args, recorder=None):
         now = time.monotonic()
         if now >= next_shot:
             next_shot = now + interval
-            fresh = grab_fresh_frame(cap)
-            if fresh is None:
+            if args.preview:
                 fresh = frame
-            capture_and_recognize(fresh, out_dir, args)
+            else:
+                fresh = grab_fresh_frame(cap)
+                if fresh is None:
+                    fresh = frame
+            latest = capture_and_recognize(fresh, out_dir, args)
 
-        if args.show:
-            cv2.imshow("Card Vision Pi (q = quit)", frame)
+        view = None
+        if args.preview or args.show:
+            view = overlay_frame(frame, latest, args.min_area, args.max_area)
+        if preview is not None and view is not None:
+            preview.update(view)
+
+        if args.show and view is not None:
+            cv2.imshow("Card Vision Pi (q = quit)", view)
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), ord("b")):
                 print("Quit.", flush=True)
@@ -210,6 +350,17 @@ def build_parser():
         "--show",
         action="store_true",
         help="Show OpenCV preview window (needs display)",
+    )
+    p.add_argument(
+        "--preview",
+        action="store_true",
+        help="Serve a browser preview with contours and the latest card names",
+    )
+    p.add_argument(
+        "--preview-port",
+        type=int,
+        default=8080,
+        help="Browser preview port (default 8080)",
     )
     p.add_argument(
         "--keyboard",
@@ -278,11 +429,25 @@ def main(argv=None):
     use_gpio = not args.keyboard
     buttons = ButtonInputs(use_gpio=use_gpio, gpio_a=args.gpio_a, gpio_b=args.gpio_b)
 
+    preview = None
+    if args.preview:
+        preview = BrowserPreview(args.preview_port)
+        try:
+            url = preview.start()
+        except RuntimeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            cap.release()
+            return 1
+        print(f"Preview: {url}", flush=True)
+        print("Green outline = card shape. Top-left text = latest recognition.", flush=True)
+
     try:
-        run_loop(cap, buttons, out_dir, args, recorder=recorder)
+        run_loop(cap, buttons, out_dir, args, recorder=recorder, preview=preview)
     except KeyboardInterrupt:
         print("\nInterrupted.", flush=True)
     finally:
+        if preview is not None:
+            preview.stop()
         if recorder is not None:
             info = recorder.stop()
             print(
