@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import Cards
 import card_vision
+import zones
 
 
 # MiniPiTFT defaults from Interactive Lab Hub Lab 2
@@ -108,7 +109,7 @@ def capture_and_recognize(frame, out_dir: str, args) -> list:
     )
     payload = {
         "detections": card_vision.public_detections(detections, verbose=args.verbose),
-        "zones": card_vision.assign_zones(detections),
+        "zones": card_vision.assign_zones(detections, image_height=frame.shape[0]),
     }
     print(json.dumps(payload), flush=True)
     if args.save:
@@ -260,6 +261,10 @@ def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
     """Draw the background mark, card-shaped contours, and the latest names."""
     out = frame.copy()
     height, width = out.shape[:2]
+    split_y = int(height * zones.HOLE_Y_FRACTION)
+    cv2.line(out, (0, split_y), (width, split_y), (0, 255, 255), 2)
+    cv2.putText(out, "board", (12, max(24, split_y - 12)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(out, "pi hole", (12, min(height - 12, split_y + 28)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
     mark_x, mark_y = width // 2, max(1, height // 100)
     cv2.drawMarker(out, (mark_x, mark_y), (0, 0, 255), cv2.MARKER_CROSS, 40, 2)
     cv2.putText(
