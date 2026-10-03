@@ -1,13 +1,15 @@
 """Lock a camera reading once, when the hand reaches a new card window.
 
 The lower part of the frame is the Pi's hole cards. The upper part is the
-board. A window counts only the cards in its own zone:
+board. The board zone often holds five card backs; faces that are still down
+read as Unknown and are ignored. Only known cards in the open window's zone
+count:
 
 - hole: exactly two known cards in the lower zone
-- flop / turn / river: exactly the new board cards in the upper zone
+- flop / turn / river: exactly 3 / 4 / 5 known cards in the upper zone
 
-An Unknown card in that zone resets the count. The same set must repeat for
-``frames`` reads. After a window locks, later frames do not change those cards.
+The same known set must repeat for ``frames`` reads. After a window locks,
+later frames do not change those cards.
 """
 
 from __future__ import annotations
@@ -39,8 +41,6 @@ _RANK = {
     "3": 3,
     "2": 2,
 }
-# Flop is the first three board cards. Turn and river each add one,
-# so the board zone must show 4 cards, then 5.
 _NEED_NEW = {"flop": 3, "turn": 1, "river": 1}
 _BOARD_TOTAL = {"flop": 3, "turn": 4, "river": 5}
 
@@ -64,6 +64,7 @@ class VisionBridge:
     def __init__(self, frames: int = 15) -> None:
         self.stable = StableCodes(frames)
         self._key: str | None = None
+        self.last_reason: str = "idle"
 
     def observe(self, player: Player, zones: dict) -> str | None:
         """Lock the open window from a zone dict. Tests can pass that dict without OpenCV.
@@ -76,40 +77,58 @@ class VisionBridge:
         if key != self._key:
             self._key = key
             self.stable.reset()
+            self.last_reason = f"opened {key}" if key else "idle"
         if key is None:
+            self.last_reason = "idle"
             return None
         visible = self._zone_cards(zones, "pi_hole" if key == "hole" else "board")
-        if visible is None or not self._qualifies(player, key, visible):
-            self.stable.reset()
+        if visible is None:
+            self.last_reason = (
+                "hole: no known cards below the line"
+                if key == "hole"
+                else f"{key}: no known cards above the line"
+            )
+            self.stable.miss()
+            return None
+        if not self._qualifies(player, key, visible):
+            self.last_reason = self._why_not(player, key, visible)
+            self.stable.miss()
             return None
         if self.stable.push(_signature(visible)) is None:
+            self.last_reason = f"{key}: stable {self.stable.count}/{self.stable.frames}"
             return None
         reply = self._commit(player, key, visible)
         if reply is None:
+            self.last_reason = f"{key}: commit failed"
             self.stable.reset()
             return None
         player.vision_locked.add(key)
         player.vision_window = None
         self._key = None
         self.stable.reset()
+        self.last_reason = f"locked {key}"
         player._append(player.phase, "Pi", reply)
         return reply
 
     def _zone_cards(self, zones: dict, zone_name: str) -> list[Card] | None:
+        """Known cards in one zone. Unknown face-down slots are ignored."""
         group = zones.get(zone_name) or []
-        if any(item.get("card") == "Unknown" for item in group):
-            return None
-        return self._visible([item.get("card", "") for item in group])
+        codes = [
+            item.get("card", "")
+            for item in group
+            if item.get("card") and item.get("card") != "Unknown"
+        ]
+        return self._visible(codes)
 
     def _visible(self, codes: list[str]) -> list[Card] | None:
         cards: list[Card] = []
         for code in codes:
-            if code == "Unknown":
-                continue
             card = code_to_card(code)
             if card is None:
                 return None
             cards.append(card)
+        if not cards:
+            return None
         if len(set(cards)) != len(cards):
             return None
         return cards
@@ -127,7 +146,15 @@ class VisionBridge:
         known = set(player.board)
         if not known.issubset(seen):
             return False
+        if seen & set(player.hole):
+            return False
         return len(seen - known) == need
+
+    def _why_not(self, player: Player, key: str, visible: list[Card]) -> str:
+        if key == "hole":
+            return f"hole: need 2 known below the line, saw {len(visible)}"
+        total = _BOARD_TOTAL.get(key, 0)
+        return f"{key}: need {total} known above the line, saw {len(visible)}"
 
     def _commit(self, player: Player, key: str, visible: list[Card]) -> str | None:
         if key == "hole":
@@ -168,10 +195,16 @@ def check_bridge() -> None:
     player._deal()
     bridge = VisionBridge(frames=3)
     hole_cards = [_seen("Jc", 455, 593), _seen("9c", 643, 605)]
-    # These sit in the board zone. They must not become hole cards.
-    upper = [_seen("Ah", 300, 270), _seen("Kd", 500, 280), _seen("2s", 700, 290)]
-    hole = _zones(hole_cards, upper)
-    flicker = _zones([_seen("4c", 455, 593), _seen("9c", 643, 605)], upper)
+    # Five board slots: three still face-down as Unknown.
+    upper_down = [
+        _seen("Unknown", 300, 270),
+        _seen("Unknown", 500, 280),
+        _seen("Unknown", 700, 290),
+        _seen("Unknown", 880, 300),
+        _seen("Unknown", 1050, 310),
+    ]
+    hole = _zones(hole_cards, upper_down)
+    flicker = _zones([_seen("4c", 455, 593), _seen("9c", 643, 605)], upper_down)
     assert bridge.observe(player, hole) is None
     assert bridge.observe(player, flicker) is None
     assert bridge.observe(player, hole) is None
@@ -181,26 +214,50 @@ def check_bridge() -> None:
     assert player.vision_window is None
     assert {card.rank for card in player.hole} == {11, 9}
     assert player.board == []
-    other_hole = _zones([_seen("Qs", 455, 593), _seen("3d", 643, 605)], upper)
+    other_hole = _zones([_seen("Qs", 455, 593), _seen("3d", 643, 605)], upper_down)
     assert bridge.observe(player, other_hole) is None
     assert {card.rank for card in player.hole} == {11, 9}
 
     _close_street(player)
-    # A card that exists only in pi_hole must not join the flop.
+    # A card only in pi_hole must not join the flop.
     flop = _zones(
         hole_cards + [_seen("Qs", 800, 610)],
-        [_seen("Ah", 300, 270), _seen("Kd", 500, 280), _seen("2s", 700, 290)],
+        [
+            _seen("Ah", 300, 270),
+            _seen("Kd", 500, 280),
+            _seen("2s", 700, 290),
+            _seen("Unknown", 880, 300),
+            _seen("Unknown", 1050, 310),
+        ],
     )
     assert bridge.observe(player, flop) is None
-    unknown = _zones(hole_cards, [_seen("Ah", 300, 270), _seen("Kd", 500, 280), _seen("Unknown", 700, 290)])
-    assert bridge.observe(player, unknown) is None
-    assert bridge.observe(player, flop) is None
+    # Too few known faces: still waiting.
+    two_up = _zones(
+        hole_cards,
+        [
+            _seen("Ah", 300, 270),
+            _seen("Kd", 500, 280),
+            _seen("Unknown", 700, 290),
+            _seen("Unknown", 880, 300),
+            _seen("Unknown", 1050, 310),
+        ],
+    )
+    assert bridge.observe(player, two_up) is None
     assert bridge.observe(player, flop) is None
     flop_reply = bridge.observe(player, flop)
     assert flop_reply is not None and player.phase is Phase.FLOP
     assert {card.rank for card in player.board} == {14, 13, 2}
     assert all(card.rank != 12 for card in player.board)
-    changed = _zones(hole_cards, [_seen("Ah", 300, 270), _seen("Kd", 500, 280), _seen("3s", 700, 290)])
+    changed = _zones(
+        hole_cards,
+        [
+            _seen("Ah", 300, 270),
+            _seen("Kd", 500, 280),
+            _seen("3s", 700, 290),
+            _seen("Unknown", 880, 300),
+            _seen("Unknown", 1050, 310),
+        ],
+    )
     assert bridge.observe(player, changed) is None
     assert {card.rank for card in player.board} == {14, 13, 2}
     assert {card.rank for card in player.hole} == {11, 9}
@@ -213,6 +270,7 @@ def check_bridge() -> None:
             _seen("Kd", 500, 280),
             _seen("2s", 700, 290),
             _seen("7h", 880, 300),
+            _seen("Unknown", 1050, 310),
         ],
     )
     assert bridge.observe(player, turn) is None
@@ -228,6 +286,7 @@ def check_bridge() -> None:
             _seen("Kd", 500, 280),
             _seen("2s", 700, 290),
             _seen("8c", 880, 300),
+            _seen("Unknown", 1050, 310),
         ],
     )
     assert bridge.observe(player, replaced) is None
@@ -245,7 +304,13 @@ def check_bridge() -> None:
     quiet = VisionBridge(frames=1)
     camera = _zones(
         [_seen("2c", 400, 600), _seen("3d", 620, 610)],
-        [_seen("Qh", 300, 270), _seen("Js", 500, 280), _seen("9d", 700, 290)],
+        [
+            _seen("Qh", 300, 270),
+            _seen("Js", 500, 280),
+            _seen("9d", 700, 290),
+            _seen("Unknown", 880, 300),
+            _seen("Unknown", 1050, 310),
+        ],
     )
     assert quiet.observe(spoken, camera) is None
     assert {card.rank for card in spoken.hole} == {14, 13}

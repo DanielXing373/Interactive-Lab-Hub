@@ -316,6 +316,7 @@ class Player:
     def _clear_cards(self) -> None:
         self.pot = 0
         self.hole: list[Card] = []
+        self.human_hole: list[Card] = []
         self.board: list[Card] = []
         self.street_in = {"human": 0, "pi": 0}
         self.acted = {"human": False, "pi": False}
@@ -458,12 +459,12 @@ class Player:
                 return "Tell me both stacks, then say deal."
             return "Say deal when you are ready."
         if phase is Phase.SHOWDOWN:
-            return "Showdown. Tell me who won: you, me, or split."
+            return "Showdown. Tell me your two cards."
         if len(self.hole) != 2:
             return "I am waiting for my two hole cards. Take your time."
         if self._betting_closed():
             if phase is Phase.RIVER:
-                return "This street is closed. Tell me who won after showdown starts."
+                return "This street is closed. Showdown is next."
             nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[phase.value]
             return f"I am waiting for the {nxt}. Take your time."
         if self._pi_should_act():
@@ -672,7 +673,7 @@ class Player:
         if self.chips["human"] == 0 or self.chips["pi"] == 0:
             if self.phase is Phase.RIVER:
                 self.phase = Phase.SHOWDOWN
-                return self._say(f"{lead} Showdown. Tell me who won.")
+                return self._say(f"{lead} Showdown. Tell me your two cards.")
             nxt = {Phase.FLOP: "turn", Phase.TURN: "river"}[self.phase]
             return self._say(f"{lead} I am waiting for the {nxt}. Take your time.")
         return self._finish(lead)
@@ -848,7 +849,7 @@ class Player:
 
     def _closed_hint(self) -> str:
         if self.phase is Phase.RIVER:
-            return "Showdown is next. Say who won after the river action is done."
+            return "Showdown is next. Tell me your two cards after the river action is done."
         nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[self.phase.value]
         return f"This street is closed. I am waiting for the {nxt}."
 
@@ -918,31 +919,52 @@ class Player:
             return ""
         if self.phase is Phase.RIVER:
             self.phase = Phase.SHOWDOWN
-            return "Showdown. Tell me who won."
+            return "Showdown. Tell me your two cards."
         nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[self.phase.value]
         return f"I am waiting for the {nxt}. Take your time."
 
     def _on_showdown(self, text: str) -> str:
-        if re.search(r"\b(you win|you won)\b", text):
-            return self._award("pi")
-        if re.search(r"\b(i win|i won)\b", text):
-            return self._award("human")
-        if re.search(r"\b(split|tie|chop)\b", text):
-            return self._split()
-        if re.search(r"\b(deal|new hand)\b", text):
-            return self._say("Tell me who won before the next deal.")
-        return self._say("Tell me who won: you, me, or split.")
+        if re.search(r"\b(deal|new hand)\b", text) and not extract_cards(text):
+            return self._say("Tell me your two cards before the next deal.")
+        cards = extract_cards(text)
+        looks_mine = bool(re.search(r"\b(my cards|my hand|i have)\b", text))
+        if not cards and not looks_mine:
+            return self._say("Showdown. Tell me your two cards.")
+        if len(cards) != 2:
+            return self._say("Tell me exactly two cards.")
+        return self._judge(cards)
 
-    def _award(self, who: str) -> str:
+    def _judge(self, human_cards: list[Card]) -> str:
+        if len(self.hole) != 2 or len(self.board) != 5:
+            return self._say("The board is not complete.")
+        if len(set(human_cards)) != 2:
+            return self._say("A card cannot appear twice.")
+        used = set(self.hole + self.board)
+        if any(card in used for card in human_cards):
+            return self._say("That card is already out.")
+        self.human_hole = human_cards
+        pi_rank = best_rank(self.hole + self.board)
+        human_rank = best_rank(human_cards + self.board)
+        if pi_rank > human_rank:
+            return self._award("pi", preface=f"You have {human_cards[0]} and {human_cards[1]}. I win.")
+        if human_rank > pi_rank:
+            return self._award("human", preface=f"You have {human_cards[0]} and {human_cards[1]}. You win.")
+        return self._split(preface=f"You have {human_cards[0]} and {human_cards[1]}.")
+
+    def _award(self, who: str, preface: str | None = None) -> str:
         won = self.pot
         self.chips[who] += won
         self.pot = 0
         self._end_hand()
         if who == "pi":
-            return self._say(f"I take the pot of {won}.")
-        return self._say(f"You take the pot of {won}.")
+            line = f"I take the pot of {won}."
+        else:
+            line = f"You take the pot of {won}."
+        if preface:
+            return self._say(f"{preface} {line}")
+        return self._say(line)
 
-    def _split(self) -> str:
+    def _split(self, preface: str | None = None) -> str:
         human_share = self.pot // 2 + self.pot % 2
         pi_share = self.pot // 2
         self.chips["human"] += human_share
@@ -950,10 +972,13 @@ class Player:
         self.pot = 0
         self._end_hand()
         odd = " You take the odd chip." if human_share != pi_share else ""
-        return self._say(f"Split. You take {human_share}. I take {pi_share}.{odd}")
+        line = f"Split. You take {human_share}. I take {pi_share}.{odd}"
+        if preface:
+            return self._say(f"{preface} {line}")
+        return self._say(line)
 
     def _known_cards(self) -> set[Card]:
-        return set(self.hole + self.board)
+        return set(self.hole + self.board + self.human_hole)
 
 
 def _check_evaluator() -> None:
@@ -977,6 +1002,22 @@ def _check_evaluator() -> None:
     odd.pot = 31
     assert odd._split() == "Split. You take 16. I take 15. You take the odd chip."
     assert odd.chips == {"human": 16, "pi": 15}
+    judged = Player()
+    judged.chips = {"human": 100, "pi": 100}
+    judged.hole = [card("two of clubs"), card("three of diamonds")]
+    judged.board = [
+        card("ace of hearts"),
+        card("king of hearts"),
+        card("queen of hearts"),
+        card("jack of hearts"),
+        card("nine of clubs"),
+    ]
+    judged.pot = 40
+    judged.phase = Phase.SHOWDOWN
+    assert judged._judge([card("two of diamonds"), card("three of clubs")]).startswith(
+        "You have two of diamonds and three of clubs. Split."
+    )
+    assert judged.chips == {"human": 120, "pi": 120}
 
 
 def _play(lines: list[str], alt_personality: bool = False) -> list[str]:
@@ -1170,7 +1211,7 @@ def _check_dialogues() -> None:
         "Stacks are already in this hand.",
     ])
 
-    _expect("checkdown, showdown questions, stacks survive the next hand", [
+    _expect("checkdown, showdown judge, stacks survive the next hand", [
         "you have 200",
         "I have 200",
         "deal",
@@ -1185,7 +1226,7 @@ def _check_dialogues() -> None:
         "what is your win rate",
         "what is on the board",
         "deal",
-        "I win",
+        "my cards are the ace of clubs and the ace of diamonds",
         "how many chips do you have",
         "how many chips do I have",
         "deal",
@@ -1202,11 +1243,11 @@ def _check_dialogues() -> None:
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts. I check.",
         f"You check. {WAIT_RIVER}",
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts, nine of clubs. I check.",
-        "You check. Showdown. Tell me who won.",
+        "You check. Showdown. Tell me your two cards.",
         "About 9 percent against a random hand.",
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts, nine of clubs.",
-        "Tell me who won before the next deal.",
-        "You take the pot of 40.",
+        "Tell me your two cards before the next deal.",
+        "You have ace of clubs and ace of diamonds. You win. You take the pot of 40.",
         "I have 180 chips. Blinds are 10 and 20.",
         "You have 220 chips. Blinds are 10 and 20.",
         DEAL_LINE,
@@ -1214,7 +1255,7 @@ def _check_dialogues() -> None:
         "You fold. I take the pot of 30.",
     ])
 
-    _expect("split, all in, and a weak fold", [
+    _expect("all in judged by cards, and a weak fold", [
         "you have 40",
         "I have 40",
         "deal",
@@ -1224,7 +1265,7 @@ def _check_dialogues() -> None:
         "flop is the two of clubs, the three of diamonds, and the four of hearts",
         "turn is the five of spades",
         "river is the nine of clubs",
-        "split",
+        "my cards are the seven of hearts and the two of diamonds",
     ], [
         "I have 40 chips.",
         "You have 40 chips.",
@@ -1234,8 +1275,8 @@ def _check_dialogues() -> None:
         "I am all in. The pot is 80.",
         f"The board is two of clubs, three of diamonds, four of hearts. {WAIT_TURN}",
         f"The board is two of clubs, three of diamonds, four of hearts, five of spades. {WAIT_RIVER}",
-        "The board is two of clubs, three of diamonds, four of hearts, five of spades, nine of clubs. Showdown. Tell me who won.",
-        "Split. You take 40. I take 40.",
+        "The board is two of clubs, three of diamonds, four of hearts, five of spades, nine of clubs. Showdown. Tell me your two cards.",
+        "You have seven of hearts and two of diamonds. I win. I take the pot of 80.",
     ])
 
     folded = _play([
@@ -1392,6 +1433,7 @@ def _watch_cards(
                     status_lines=[
                         f"phase={player.phase.value}",
                         f"locked={','.join(sorted(player.vision_locked)) or '-'}",
+                        bridge.last_reason,
                     ],
                 )
                 preview.update(view)
@@ -1410,7 +1452,7 @@ def run_voice(
     voice: Path,
     min_silence: float,
     camera: bool = True,
-    vision_frames: int = 15,
+    vision_frames: int = 8,
     flip: str = "horizontal",
     preview_port: int | None = 8080,
 ) -> None:
@@ -1551,7 +1593,7 @@ def main() -> None:
     parser.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     parser.add_argument("--min-silence", type=float, default=BET_SILENCE)
     parser.add_argument("--no-camera", action="store_true", help="microphone only")
-    parser.add_argument("--vision-frames", type=int, default=15)
+    parser.add_argument("--vision-frames", type=int, default=8)
     parser.add_argument(
         "--preview-port",
         type=int,
