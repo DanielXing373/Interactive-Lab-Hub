@@ -10,6 +10,10 @@ stay in the same phase.
     python poker_player.py --check
     python poker_player.py
 
+The microphone and camera run together. After deal, and again when a street
+closes, the camera reads until the same cards repeat. That reading is locked
+for the street. Pass --no-camera to use the microphone alone.
+
 ``alt_personality`` is the switch for a second persona. Both personas use the
 same sentences for now. Hole cards and win rate stay truthful either way.
 """
@@ -261,6 +265,8 @@ class Player:
         self.hand_count = 0
         self.last_spoken: str | None = None
         self.last_transcript: Path | None = None
+        self.vision_window: str | None = None
+        self.vision_locked: set[str] = set()
         self._clear_cards()
         if record_dir is not None:
             record_dir.mkdir(parents=True, exist_ok=True)
@@ -275,6 +281,20 @@ class Player:
         self.board: list[Card] = []
         self.street_in = {"human": 0, "pi": 0}
         self.acted = {"human": False, "pi": False}
+        self.vision_window = None
+        self.vision_locked = set()
+
+    def refresh_vision_window(self) -> None:
+        """Open a one-shot camera read when the hand is waiting for cards."""
+        key = None
+        if self.phase is Phase.PREFLOP and len(self.hole) != 2:
+            key = "hole"
+        elif len(self.hole) == 2 and self._betting_closed():
+            key = {"preflop": "flop", "flop": "turn", "turn": "river"}.get(self.phase.value)
+        if key is None or key in self.vision_locked:
+            self.vision_window = None
+            return
+        self.vision_window = key
 
     def greeting(self) -> str:
         line = self._say(
@@ -1199,7 +1219,49 @@ def run_text(alt_personality: bool, trace: bool) -> None:
             print(player.status())
 
 
-def run_voice(alt_personality: bool, model: str, vad_model: Path, voice: Path, min_silence: float) -> None:
+def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None:
+    """Read the camera only while a card window is open. Speak from the mic thread."""
+    vision_dir = Path(__file__).resolve().parent.parent / "card vision"
+    if str(vision_dir) not in sys.path:
+        sys.path.insert(0, str(vision_dir))
+    import cv2
+    import card_vision
+    from vision_bridge import VisionBridge
+
+    cap = card_vision.open_usb_camera()
+    bridge = VisionBridge(frames=frames)
+    flips = {"horizontal": 1, "vertical": 0, "both": -1}
+    try:
+        while not stop.is_set():
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                stop.wait(0.2)
+                continue
+            if flip in flips:
+                frame = cv2.flip(frame, flips[flip])
+            player.refresh_vision_window()
+            if player.vision_window is None:
+                stop.wait(0.2)
+                continue
+            detections = card_vision.detect_cards(frame)
+            codes = [item["card"] for item in detections]
+            reply = bridge.observe(player, codes)
+            if reply:
+                speech_q.put(reply)
+    finally:
+        cap.release()
+
+
+def run_voice(
+    alt_personality: bool,
+    model: str,
+    vad_model: Path,
+    voice: Path,
+    min_silence: float,
+    camera: bool = True,
+    vision_frames: int = 15,
+    flip: str = "horizontal",
+) -> None:
     import numpy as np
     import sherpa_onnx
     import sounddevice as sd
@@ -1228,24 +1290,50 @@ def run_voice(alt_personality: bool, model: str, vad_model: Path, voice: Path, m
             sd.play(audio, samplerate=chunk.sample_rate)
             sd.wait()
 
+    import queue
+    import threading
+
+    speech_q: queue.Queue[str] = queue.Queue()
+    stop = threading.Event()
+    watcher = None
+    if camera:
+        watcher = threading.Thread(
+            target=_watch_cards,
+            args=(player, speech_q, stop, vision_frames, flip),
+            daemon=True,
+        )
+        watcher.start()
+        print(f"Camera on. A card window locks after {vision_frames} matching reads.", flush=True)
+
+    def drain() -> None:
+        while True:
+            try:
+                say(speech_q.get_nowait())
+            except queue.Empty:
+                return
+
     say(player.greeting())
     buffer = np.empty(0, dtype=np.float32)
     samples_per_read = int(0.1 * SAMPLE_RATE)
-    with sd.InputStream(channels=1, dtype="float32", samplerate=SAMPLE_RATE) as stream:
-        while True:
-            chunk, _ = stream.read(samples_per_read)
-            buffer = np.concatenate([buffer, chunk.reshape(-1)])
-            while len(buffer) > window:
-                vad.accept_waveform(buffer[:window])
-                buffer = buffer[window:]
-            while not vad.empty():
-                utterance = np.array(vad.front.samples, dtype=np.float32)
-                vad.pop()
-                segments, _ = recognizer.transcribe(utterance, beam_size=1)
-                heard = " ".join(part.text.strip() for part in segments)
-                if heard:
-                    print(f"> {heard}")
-                    say(player.on_heard(heard))
+    try:
+        with sd.InputStream(channels=1, dtype="float32", samplerate=SAMPLE_RATE) as stream:
+            while True:
+                drain()
+                chunk, _ = stream.read(samples_per_read)
+                buffer = np.concatenate([buffer, chunk.reshape(-1)])
+                while len(buffer) > window:
+                    vad.accept_waveform(buffer[:window])
+                    buffer = buffer[window:]
+                while not vad.empty():
+                    utterance = np.array(vad.front.samples, dtype=np.float32)
+                    vad.pop()
+                    segments, _ = recognizer.transcribe(utterance, beam_size=1)
+                    heard = " ".join(part.text.strip() for part in segments)
+                    if heard:
+                        print(f"> {heard}")
+                        say(player.on_heard(heard))
+    finally:
+        stop.set()
 
 
 def main() -> None:
@@ -1259,6 +1347,13 @@ def main() -> None:
     parser.add_argument("--vad-model", type=Path, default=DEFAULT_VAD)
     parser.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     parser.add_argument("--min-silence", type=float, default=BET_SILENCE)
+    parser.add_argument("--no-camera", action="store_true", help="microphone only")
+    parser.add_argument("--vision-frames", type=int, default=15)
+    parser.add_argument(
+        "--flip",
+        choices=("horizontal", "vertical", "both", "none"),
+        default="horizontal",
+    )
     args = parser.parse_args()
     if args.probe is not None:
         _probe(args.probe)
@@ -1266,12 +1361,23 @@ def main() -> None:
     if args.check:
         _check_evaluator()
         _check_dialogues()
+        from vision_bridge import check_bridge
+        check_bridge()
         print("check ok")
         return
     if args.text:
         run_text(args.alt_personality, args.trace)
         return
-    run_voice(args.alt_personality, args.model, args.vad_model, args.voice, args.min_silence)
+    run_voice(
+        args.alt_personality,
+        args.model,
+        args.vad_model,
+        args.voice,
+        args.min_silence,
+        camera=not args.no_camera,
+        vision_frames=args.vision_frames,
+        flip=args.flip,
+    )
 
 
 if __name__ == "__main__":
