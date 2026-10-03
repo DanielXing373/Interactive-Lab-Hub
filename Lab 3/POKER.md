@@ -67,6 +67,9 @@ idle → preflop → flop → turn → river → showdown → idle
 - 你有什么牌
 - 胜率多少
 - 底池多少
+- 你在等什么 / 下一步是什么（`what are you waiting for`、`what's next`、`where are we`）
+
+麦克风模式里，Pi 说话时会屏蔽听筒，并丢掉刚说完后一小段回声。发牌之后它会明确说自己在等两张底牌，并让你慢慢来。
 
 ## 一句话怎么读
 
@@ -152,7 +155,7 @@ idle → preflop → flop → turn → river → showdown → idle
 |---|---|
 | `you have 1500` | I have 1500 chips. |
 | `I have 1500` | You have 1500 chips. |
-| `deal` | New hand. You post 10. I post 20. Tell me my cards. |
+| `deal` | New hand. You post 10. I post 20. I am waiting for my two hole cards. Take your time. |
 | `your cards are the ten of spades and the seven of hearts` | I have ten of spades and seven of hearts. Your action. |
 | `what is the pot` | The pot is 30. |
 | `how many chips do you have if the bet is 50` | I have 1480 chips. The pot is 30. |
@@ -195,7 +198,7 @@ idle → preflop → flop → turn → river → showdown → idle
 | `I raise to 30` | A raise must be to at least 40. |
 | `I call 5` | It is 10 to call. |
 | `I check and raise` | Say one action: fold, check, call, bet, or raise. |
-| `I call` | You call. I check. Tell me the flop. |
+| `I call` | You call. I check. I am waiting for the flop. Take your time. |
 | `turn is the two of spades` | The turn does not come now. |
 | `flop is the two of clubs and the three of diamonds` | The flop needs three cards. |
 | `flop is the ace of spades, the four of diamonds, and the five of clubs` | That card is already out. |
@@ -212,13 +215,13 @@ idle → preflop → flop → turn → river → showdown → idle
 |---|---|
 | `you have 200` | I have 200 chips. |
 | `I have 200` | You have 200 chips. |
-| `deal` | New hand. You post 10. I post 20. Tell me my cards. |
+| `deal` | New hand. You post 10. I post 20. I am waiting for my two hole cards. Take your time. |
 | `your cards are the seven of hearts and the two of clubs` | I have seven of hearts and two of clubs. Your action. |
-| `I call` | You call. I check. Tell me the flop. |
+| `I call` | You call. I check. I am waiting for the flop. Take your time. |
 | `flop is the ace of spades, the king of diamonds, and the queen of clubs` | The board is ace of spades, king of diamonds, queen of clubs. I check. |
-| `I check` | You check. Tell me the turn. |
+| `I check` | You check. I am waiting for the turn. Take your time. |
 | `turn is the three of hearts` | The board is ace of spades, king of diamonds, queen of clubs, three of hearts. I check. |
-| `I check` | You check. Tell me the river. |
+| `I check` | You check. I am waiting for the river. Take your time. |
 | `river is the nine of clubs` | The board is ace of spades, king of diamonds, queen of clubs, three of hearts, nine of clubs. I check. |
 | `I check` | You check. Showdown. Tell me who won. |
 | `what is your win rate` | About 9 percent against a random hand. |
@@ -227,7 +230,7 @@ idle → preflop → flop → turn → river → showdown → idle
 | `I win` | You take the pot of 40. |
 | `how many chips do you have` | I have 180 chips. Blinds are 10 and 20. |
 | `how many chips do I have` | You have 220 chips. Blinds are 10 and 20. |
-| `deal` | New hand. You post 10. I post 20. Tell me my cards. |
+| `deal` | New hand. You post 10. I post 20. I am waiting for my two hole cards. Take your time. |
 | `your cards are the ace of clubs and the ace of diamonds` | I have ace of clubs and ace of diamonds. Your action. |
 | `I fold` | You fold. I take the pot of 30. |
 
@@ -241,12 +244,12 @@ idle → preflop → flop → turn → river → showdown → idle
 |---|---|
 | `you have 40` | I have 40 chips. |
 | `I have 40` | You have 40 chips. |
-| `deal` | New hand. You post 10. I post 20. Tell me my cards. |
+| `deal` | New hand. You post 10. I post 20. I am waiting for my two hole cards. Take your time. |
 | `your cards are the ace of spades and the ace of hearts` | I have ace of spades and ace of hearts. Your action. |
-| `I raise to 40` | You raise all in. I call all in. Tell me the flop. |
+| `I raise to 40` | You raise all in. I call all in. I am waiting for the flop. Take your time. |
 | `how many chips do you have` | I am all in. The pot is 80. |
-| `flop is the two of clubs, the three of diamonds, and the four of hearts` | The board is two of clubs, three of diamonds, four of hearts. Tell me the turn. |
-| `turn is the five of spades` | The board is two of clubs, three of diamonds, four of hearts, five of spades. Tell me the river. |
+| `flop is the two of clubs, the three of diamonds, and the four of hearts` | The board is two of clubs, three of diamonds, four of hearts. I am waiting for the turn. Take your time. |
+| `turn is the five of spades` | The board is two of clubs, three of diamonds, four of hearts, five of spades. I am waiting for the river. Take your time. |
 | `river is the nine of clubs` | The board is two of clubs, three of diamonds, four of hearts, five of spades, nine of clubs. Showdown. Tell me who won. |
 | `you win` | I take the pot of 80. |
 
