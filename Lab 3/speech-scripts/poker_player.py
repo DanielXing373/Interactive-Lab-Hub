@@ -12,7 +12,9 @@ stay in the same phase.
 
 The microphone and camera run together. After deal, and again when a street
 closes, the camera reads until the same cards repeat. That reading is locked
-for the street. Pass --no-camera to use the microphone alone.
+for the street. Pass --no-camera to use the microphone alone. With the camera
+on, open http://<pi-ip>:8080 to preview the frame, zone line, and card labels
+(--preview-port 0 disables it).
 
 ``alt_personality`` is the switch for a second persona. Both personas use the
 same sentences for now. Hole cards and win rate stay truthful either way.
@@ -1333,18 +1335,35 @@ def run_text(alt_personality: bool, trace: bool) -> None:
             print(player.status())
 
 
-def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None:
-    """Read the camera only while a card window is open. Speak from the mic thread."""
+def _watch_cards(
+    player: Player,
+    speech_q,
+    stop,
+    frames: int,
+    flip: str,
+    preview_port: int | None = 8080,
+) -> None:
+    """Always stream the camera. Lock cards only while a window is open."""
     vision_dir = Path(__file__).resolve().parent.parent / "card vision"
     if str(vision_dir) not in sys.path:
         sys.path.insert(0, str(vision_dir))
     import cv2
     import card_vision
+    from browser_preview import BrowserPreview
     from vision_bridge import VisionBridge
 
     cap = card_vision.open_usb_camera()
     bridge = VisionBridge(frames=frames)
     flips = {"horizontal": 1, "vertical": 0, "both": -1}
+    preview = None
+    if preview_port:
+        preview = BrowserPreview(preview_port)
+        url = preview.start()
+        print(f"Camera preview: {url}", flush=True)
+        print(
+            "Put the Pi hole cards BELOW the yellow line. Board cards stay ABOVE it.",
+            flush=True,
+        )
     try:
         while not stop.is_set():
             ok, frame = cap.read()
@@ -1354,15 +1373,33 @@ def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None
             if flip in flips:
                 frame = cv2.flip(frame, flips[flip])
             player.refresh_vision_window()
-            if player.vision_window is None:
-                stop.wait(0.2)
-                continue
+            window = player.vision_window
+            # Always detect so the preview shows what the model sees while you deal.
             detections = card_vision.detect_cards(frame)
             zones = card_vision.assign_zones(detections, image_height=frame.shape[0])
-            reply = bridge.observe(player, zones)
-            if reply:
-                speech_q.put(reply)
+            reply = None
+            if window is not None:
+                reply = bridge.observe(player, zones)
+                if reply:
+                    speech_q.put(reply)
+            if preview is not None:
+                view = card_vision.annotate_poker_preview(
+                    frame,
+                    detections,
+                    window=window,
+                    stable_count=bridge.stable.count,
+                    stable_need=frames,
+                    status_lines=[
+                        f"phase={player.phase.value}",
+                        f"locked={','.join(sorted(player.vision_locked)) or '-'}",
+                    ],
+                )
+                preview.update(view)
+            else:
+                stop.wait(0.05)
     finally:
+        if preview is not None:
+            preview.stop()
         cap.release()
 
 
@@ -1375,6 +1412,7 @@ def run_voice(
     camera: bool = True,
     vision_frames: int = 15,
     flip: str = "horizontal",
+    preview_port: int | None = 8080,
 ) -> None:
     import queue
     import threading
@@ -1452,7 +1490,7 @@ def run_voice(
     if camera:
         watcher = threading.Thread(
             target=_watch_cards,
-            args=(player, speech_q, stop, vision_frames, flip),
+            args=(player, speech_q, stop, vision_frames, flip, preview_port),
             daemon=True,
         )
         watcher.start()
@@ -1515,6 +1553,12 @@ def main() -> None:
     parser.add_argument("--no-camera", action="store_true", help="microphone only")
     parser.add_argument("--vision-frames", type=int, default=15)
     parser.add_argument(
+        "--preview-port",
+        type=int,
+        default=8080,
+        help="browser MJPEG preview port (default 8080; 0 disables)",
+    )
+    parser.add_argument(
         "--flip",
         choices=("horizontal", "vertical", "both", "none"),
         default="horizontal",
@@ -1542,6 +1586,7 @@ def main() -> None:
         camera=not args.no_camera,
         vision_frames=args.vision_frames,
         flip=args.flip,
+        preview_port=args.preview_port or None,
     )
 
 

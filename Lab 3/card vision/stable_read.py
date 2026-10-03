@@ -13,6 +13,10 @@ class StableCodes:
         self._seen: frozenset[str] | None = None
         self._count = 0
 
+    @property
+    def count(self) -> int:
+        return self._count
+
     def reset(self) -> None:
         self._seen = None
         self._count = 0

@@ -21,7 +21,7 @@ python poker_player.py --text --trace
 python poker_player.py --check
 ```
 
-`quit` 退出文字模式。Pi 上接麦克风时，在 `speech-scripts` 里激活 `.venv` 后直接运行 `python poker_player.py`。下注时的静音阈值是 1.2 秒。
+`quit` 退出文字模式。Pi 上接麦克风时，在 `speech-scripts` 里激活 `.venv` 后直接运行 `python poker_player.py`。下注时的静音阈值是 1.2 秒。摄像头默认在 `http://<pi-ip>:8080` 开预览（黄线下方是 Pi 底牌区，上方是公共牌）。`--preview-port 0` 关掉预览。
 
 文字模式和麦克风模式都会把对话写进 `Lab 3/transcripts/`。`session.txt` 是这一整场，从打招呼开始。每一手发牌到结束，另存一份 `hand_001.txt`、`hand_002.txt`。一手的文件从 `deal` 记到这手结束，里面有每一句当时的阶段。设筹码那些话在 `session.txt` 里，不在这一手的文件里。
 
