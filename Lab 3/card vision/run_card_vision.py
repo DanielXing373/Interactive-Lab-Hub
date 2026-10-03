@@ -49,7 +49,7 @@ def run_image(args):
     result = public_result(detections, args.verbose)
     print(json.dumps({
         "detections": result,
-        "zones": card_vision.assign_zones(detections),
+        "zones": card_vision.assign_zones(detections, image_height=image.shape[0]),
     }, indent=2))
 
     annotated = draw_detections(image, detections)
@@ -142,7 +142,7 @@ def run_webcam(args):
                 result = public_result(detections, args.verbose)
                 print(json.dumps({
                     "detections": result,
-                    "zones": card_vision.assign_zones(detections),
+                    "zones": card_vision.assign_zones(detections, image_height=frame.shape[0]),
                 }), flush=True)
 
             if recorder is not None:

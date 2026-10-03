@@ -318,27 +318,17 @@ def public_detections(
     return [{"card": d["card"], "center": d["center"]} for d in detections]
 
 
-def assign_zones(detections: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    """Hold cards until table zones exist.
+def assign_zones(
+    detections: List[Dict[str, Any]],
+    image_height: int = 720,
+    hole_from: Optional[float] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Split detections into pi_hole and board. See zones.py."""
+    import zones
 
-    pi_hole, board, and ignored stay empty on purpose. Known cards go to
-    unassigned with their centers, so a later y-split can move them without
-    changing this shape. Unknown matches stay out of unassigned.
-    """
-    known: List[Dict[str, Any]] = []
-    unknown: List[Dict[str, Any]] = []
-    for det in public_detections(detections):
-        if det["card"] == "Unknown":
-            unknown.append(det)
-        else:
-            known.append(det)
-    return {
-        "pi_hole": [],
-        "board": [],
-        "ignored": [],
-        "unassigned": known,
-        "unknown": unknown,
-    }
+    if hole_from is None:
+        return zones.assign_zones(detections, image_height=image_height)
+    return zones.assign_zones(detections, image_height=image_height, hole_from=hole_from)
 
 
 def export_capture(
