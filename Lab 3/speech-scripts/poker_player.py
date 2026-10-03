@@ -1244,7 +1244,8 @@ def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None
                 stop.wait(0.2)
                 continue
             detections = card_vision.detect_cards(frame)
-            reply = bridge.observe(player, detections, image_height=frame.shape[0])
+            zones = card_vision.assign_zones(detections, image_height=frame.shape[0])
+            reply = bridge.observe(player, zones)
             if reply:
                 speech_q.put(reply)
     finally:
