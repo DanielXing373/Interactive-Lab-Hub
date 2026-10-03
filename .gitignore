@@ -6,3 +6,12 @@ __*
 .venv*
 Lab 3/transcripts/
 .venv/
+*.wav
+!Lab 3/speech-scripts/lookdave.wav
+!Lab 3/welcome.wav
+*.onnx
+*.onnx.json
+Lab 3/models/
+Lab 3/voices/
+Lab 3/card vision/preview.py
+Lab 3/card vision/captures/
