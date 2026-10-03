@@ -30,6 +30,8 @@ SUIT_WIDTH = 70
 SUIT_HEIGHT = 100
 
 RANK_DIFF_MAX = 2000
+RANK_DIFF_SOFT_MAX = 3000
+RANK_LEAD_MIN = 400
 SUIT_DIFF_MAX = 700
 
 CARD_MAX_AREA = 120000
@@ -273,6 +275,7 @@ def match_card(qCard, train_ranks, train_suits):
     The best match is the rank or suit image that has the least difference."""
 
     best_rank_match_diff = 10000
+    second_rank_diff = 10000
     best_suit_match_diff = 10000
     best_rank_match_name = "Unknown"
     best_suit_match_name = "Unknown"
@@ -294,8 +297,11 @@ def match_card(qCard, train_ranks, train_suits):
                 
                 if rank_diff < best_rank_match_diff:
                     best_rank_diff_img = diff_img
+                    second_rank_diff = best_rank_match_diff
                     best_rank_match_diff = rank_diff
                     best_rank_name = Trank.name
+                elif rank_diff < second_rank_diff:
+                    second_rank_diff = rank_diff
 
         # Same process with suit images
         for Tsuit in train_suits:
@@ -311,7 +317,12 @@ def match_card(qCard, train_ranks, train_suits):
     # Combine best rank match and best suit match to get query card's identity.
     # If the best matches have too high of a difference value, card identity
     # is still Unknown
-    if (best_rank_match_diff < RANK_DIFF_MAX):
+    rank_lead = second_rank_diff - best_rank_match_diff
+    rank_confident = best_rank_match_diff < RANK_DIFF_MAX
+    rank_clear = (
+        best_rank_match_diff < RANK_DIFF_SOFT_MAX and rank_lead >= RANK_LEAD_MIN
+    )
+    if rank_confident or rank_clear:
         best_rank_match_name = best_rank_name
 
     if (best_suit_match_diff < SUIT_DIFF_MAX):
@@ -325,6 +336,7 @@ def match_card(qCard, train_ranks, train_suits):
         best_suit_match_diff,
         best_rank_name,
         best_suit_name,
+        second_rank_diff,
     )
     
     

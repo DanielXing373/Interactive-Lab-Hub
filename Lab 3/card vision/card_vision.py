@@ -185,9 +185,15 @@ def detect_cards(
                 continue
 
             qcard = Cards.preprocess_card(cnts_sort[i], image)
-            best_rank, best_suit, rank_diff, suit_diff, rank_guess, suit_guess = Cards.match_card(
-                qcard, train_ranks, train_suits
-            )
+            (
+                best_rank,
+                best_suit,
+                rank_diff,
+                suit_diff,
+                rank_guess,
+                suit_guess,
+                rank_second_diff,
+            ) = Cards.match_card(qcard, train_ranks, train_suits)
             card_str = format_card(best_rank, best_suit)
 
             if (not include_unknown) and card_str == "Unknown":
@@ -204,6 +210,7 @@ def detect_cards(
                     "rank_guess": rank_guess,
                     "suit_guess": suit_guess,
                     "rank_diff": int(rank_diff),
+                    "rank_second_diff": int(rank_second_diff),
                     "suit_diff": int(suit_diff),
                 }
             )
