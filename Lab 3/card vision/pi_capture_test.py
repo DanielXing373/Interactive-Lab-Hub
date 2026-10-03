@@ -119,7 +119,7 @@ def capture_and_recognize(frame, out_dir: str, args) -> list:
             verbose=args.verbose,
         )
         print(f"Saved: {exported['json']}", flush=True)
-    return payload["detections"]
+    return detections
 
 
 def grab_fresh_frame(cap, flush_reads: int = 5):
@@ -234,6 +234,28 @@ def make_corner_panel(frame, min_area, max_area):
         return None
 
 
+def _status_lines(detections) -> list:
+    """Top-left text for a one-card sweep: result, guess, and both diffs."""
+    if not detections:
+        return ["result: none"]
+    lines = []
+    for item in detections[:2]:
+        card_name = str(item.get("card", "?"))
+        guess_rank = item.get("rank_guess") or "?"
+        guess_suit = item.get("suit_guess") or "?"
+        shown = card_name if card_name != "Unknown" else ("?" + str(guess_rank))
+        lines.append("result: %s   guess: %s of %s" % (shown, guess_rank, guess_suit))
+        lines.append(
+            "rank %s   second %s   suit %s"
+            % (
+                item.get("rank_diff", "?"),
+                item.get("rank_second_diff", "?"),
+                item.get("suit_diff", "?"),
+            )
+        )
+    return lines
+
+
 def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
     """Draw the background mark, card-shaped contours, and the latest names."""
     out = frame.copy()
@@ -273,27 +295,15 @@ def overlay_frame(frame, detections, min_area, max_area, corner_panel=None):
             cv2.drawContours(out, [contours[index]], -1, color, 2)
 
     labeled = card_vision.annotate_frame(out, detections or [])
-    names = []
-    for item in detections or []:
-        card_name = str(item.get("card", "?"))
-        if card_name != "Unknown":
-            names.append(card_name)
-            continue
-        guess = item.get("rank_guess")
-        if not guess:
-            names.append("Unknown")
-            continue
-        names.append(
-            "?%s of %s  r%s s%s"
-            % (guess, item.get("suit_guess", "?"), item.get("rank_diff", "?"), item.get("suit_diff", "?"))
+    lines = _status_lines(detections)
+    for index, line in enumerate(lines):
+        origin = (12, 32 + index * 28)
+        cv2.putText(
+            labeled, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA
         )
-    banner = "result: " + (", ".join(names) if names else "none")
-    cv2.putText(
-        labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA
-    )
-    cv2.putText(
-        labeled, banner, (12, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA
-    )
+        cv2.putText(
+            labeled, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA
+        )
     if corner_panel is not None:
         panel_h, panel_w = corner_panel.shape[:2]
         y0 = max(0, labeled.shape[0] - panel_h)
