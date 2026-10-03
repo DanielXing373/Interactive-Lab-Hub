@@ -135,8 +135,8 @@ def preprocess_image(image):
     # its intensity. The adaptive threshold is set at 50 (THRESH_ADDER) higher
     # than that. This allows the threshold to adapt to the lighting conditions.
     img_h, img_w = np.shape(gray)[:2]
-    bkg_level = gray[int(img_h/100)][int(img_w/2)]
-    thresh_level = bkg_level + BKG_THRESH
+    bkg_level = int(gray[int(img_h/100)][int(img_w/2)])
+    thresh_level = min(255, bkg_level + BKG_THRESH)
 
     retval, thresh = cv2.threshold(blur,thresh_level,255,cv2.THRESH_BINARY)
     
@@ -217,7 +217,7 @@ def preprocess_card(contour, image):
     Qcorner_zoom = cv2.resize(Qcorner, (0,0), fx=4, fy=4)
 
     # Sample known white pixel intensity to determine good threshold level
-    white_level = Qcorner_zoom[15,int((CORNER_WIDTH*4)/2)]
+    white_level = int(Qcorner_zoom[15, int((CORNER_WIDTH * 4) / 2)])
     thresh_level = white_level - CARD_THRESH
     if (thresh_level <= 0):
         thresh_level = 1
