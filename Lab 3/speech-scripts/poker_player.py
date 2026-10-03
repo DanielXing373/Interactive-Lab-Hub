@@ -255,7 +255,7 @@ class Player:
         self.record_dir = record_dir
         self.small_blind = 10
         self.big_blind = 20
-        self.chips: dict[str, int | None] = {"human": None, "pi": None}
+        self.chips: dict[str, int | None] = {"human": 500, "pi": 500}
         self.phase = Phase.IDLE
         self.resume = Phase.IDLE
         self.pending: dict | None = None
@@ -298,8 +298,8 @@ class Player:
 
     def greeting(self) -> str:
         line = self._say(
-            f"Default blinds are {self.small_blind} and {self.big_blind}. "
-            "Tell me both stacks, then say deal."
+            f"Blinds are {self.small_blind} and {self.big_blind}. "
+            "We each have 500 chips. Say deal."
         )
         self._append(Phase.IDLE, "Pi", line)
         return line
@@ -441,7 +441,7 @@ class Player:
             return stacks
         if re.search(r"\b(deal|new hand)\b", text):
             return self._deal()
-        return self._say("Tell me both stacks, then say deal.")
+        return self._say("Say deal.")
 
     def _parse_blinds(self, text: str) -> str | None:
         if "blind" not in text:
@@ -931,7 +931,7 @@ def _check_dialogues() -> None:
         "how many chips do you have",
         "how many chips do I have",
     ], [
-        "Tell me both stacks first.",
+        "I have 500 chips. Blinds are 10 and 20.",
         "There are no community cards yet.",
         "You have not told me my cards.",
         "Tell me my cards before I can estimate.",
@@ -954,7 +954,7 @@ def _check_dialogues() -> None:
         "Tell me the small blind and the big blind.",
         "A stack has to cover at least the big blind.",
         "I have 1500 chips.",
-        "Tell me both stacks first.",
+        "New hand. You post 10. I post 20. Tell me my cards.",
     ])
 
     player = Player()
@@ -1283,12 +1283,22 @@ def run_voice(
     vad = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=30)
     window = config.silero_vad.window_size
 
+    stream_holder: dict = {}
+
     def say(text: str) -> None:
-        print(text)
-        for chunk in piper.synthesize(text):
-            audio = np.frombuffer(chunk.audio_int16_bytes, dtype=np.int16)
-            sd.play(audio, samplerate=chunk.sample_rate)
+        print(f"Pi: {text}", flush=True)
+        for audio_chunk in piper.synthesize(text):
+            audio = np.frombuffer(audio_chunk.audio_int16_bytes, dtype=np.int16)
+            sd.play(audio, samplerate=audio_chunk.sample_rate)
             sd.wait()
+        mic = stream_holder.get("stream")
+        if mic is not None:
+            try:
+                available = mic.read_available
+                if available:
+                    mic.read(available)
+            except Exception:
+                pass
 
     import queue
     import threading
@@ -1317,6 +1327,7 @@ def run_voice(
     samples_per_read = int(0.1 * SAMPLE_RATE)
     try:
         with sd.InputStream(channels=1, dtype="float32", samplerate=SAMPLE_RATE) as stream:
+            stream_holder["stream"] = stream
             while True:
                 drain()
                 chunk, _ = stream.read(samples_per_read)
@@ -1330,7 +1341,7 @@ def run_voice(
                     segments, _ = recognizer.transcribe(utterance, beam_size=1)
                     heard = " ".join(part.text.strip() for part in segments)
                     if heard:
-                        print(f"> {heard}")
+                        print(f"Heard: {heard}", flush=True)
                         say(player.on_heard(heard))
     finally:
         stop.set()
