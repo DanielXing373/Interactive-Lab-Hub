@@ -2,6 +2,15 @@
 
 **NAMES OF COLLABORATORS HERE**
 
+I used cursor as a coding assistant. 
+
+I borrowed and renovated a 9-year-old repo from EdjeElectronics for card recognition part of this project. I made my version of card arrangement, part of the recognition logic, and locking pattern for the Texas Hold'em game. 
+
+Here is the link to the repo: https://github.com/EdjeElectronics/OpenCV-Playing-Card-Detector
+
+My roommate also helped me set up the camera. 
+
+
 <details>
 <summary><strong>Lab introduction and prep (instructions)</strong></summary>
 
@@ -125,6 +134,8 @@ The demo script also shows `--output-raw`, which streams audio to the speaker as
 (This shell file should be saved to your own repo for this lab.)
 
 \*\***Then answer: Is the same greeting, in these different voices, the same greeting? Describe one concrete way the voice changed what the utterance seemed to mean or who seemed to be speaking.**\*\*
+
+They are different. One difference is the coherence problem, between words and sentences. Piper feels more like a whole sentence, where others have weird cutoffs between words. 
 
 ## B. Speech to Text
 
@@ -252,6 +263,14 @@ The system should:
 
 *Include videos or screencaptures of both the system and the controller.*
 
+Here is the link to the video (please show my video!):
+
+https://drive.google.com/file/d/1eE-MHEI3whTUwCa0CTz5cY2vIqA2TGuY/view?usp=sharing
+
+The controller is the Mac terminal, where it shows the scripts of the interaction. Also, there is a preview window in the browser where I can see what the camera is taking in. The microphone will collect verbal inputs like questions and my play moves. 
+
+The setup of the scene is as follows: I hang the camera high, and lowered its exposure for better recognition. I also had a lamp, adjusted between several light patterns for better recognition again. 
+
 ## Test the system
 
 Try to get at least two people to interact with your system. (Ideally, you would inform them that there is a wizard *after* the interaction, but we recognize that can be hard.)
@@ -259,16 +278,16 @@ Try to get at least two people to interact with your system. (Ideally, you would
 Answer the following:
 
 ### What worked well about the system and what didn't?
-\*\**your answer here*\*\*
+\*\**The system recognizes each state correctly, and can make moves based on the given probability system. However, the moves it take are always the same if the input of the system is the same. As a result, we can predict its moves, which makes it easy to game the system. *\*\*
 
 ### What worked well about the controller and what didn't?
-\*\**your answer here*\*\*
+\*\**When the verbal input is not clear enough, the controller will ask for the input again with some recommended choices for the user. Therefore, even if there is a mistake, it is easy to pick up from the it. It didn't work well when recognizing numbers as usual, and also had problems pinpointing key phrases that lead to other states of the system. *\*\*
 
 ### What lessons can you take away from the WoZ interactions for designing a more autonomous version of the system?
-\*\**your answer here*\*\*
+\*\**One thing I added to Pi is the prompting of a answerable question. During WoZ, people asked lots of surprising questions. And due to the limited time for development, I decide to let Pi answer only some of them, and prompting the user to ask other questions when it can't understand the verbal input. *\*\*
 
 ### How could you use your system to create a dataset of interaction? What other sensing modalities would make sense to capture?
-\*\**your answer here*\*\*
+\*\**Documenting the state of the system, and collecting people's reaction to the system, whether it is a question, a change on the cards on the table, or something else. It might be benefitial to collect how long have been people thinking or waiting. Because during the actual interaction, I found sonme of the timing adn wording are still improper, including asking simple questions with long wording, lacking of signs that signal a question and so on. I've implemented a "take your time" response during part of the interaction, and I found that quite reliefing when know that the Pi could wait for my move. *\*\*
 
 <details>
   <summary><strong>Submission Cleanup Reminder (Click to Expand)</strong></summary>
