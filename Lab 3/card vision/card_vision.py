@@ -298,6 +298,60 @@ def annotate_frame(
     return out
 
 
+def annotate_poker_preview(
+    image: np.ndarray,
+    detections: List[Dict[str, Any]],
+    *,
+    hole_from: float = 0.68,
+    window: Optional[str] = None,
+    stable_count: int = 0,
+    stable_need: int = 15,
+    status_lines: Optional[List[str]] = None,
+) -> np.ndarray:
+    """Frame for the browser preview: zone cut, card labels, wait status."""
+    import zones as zone_mod
+
+    out = annotate_frame(image, detections)
+    height, width = out.shape[:2]
+    cut = int(height * float(hole_from))
+    cv2.line(out, (0, cut), (width - 1, cut), (0, 255, 255), 2)
+    cv2.putText(
+        out,
+        "BOARD (above)",
+        (12, max(28, cut - 12)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        out,
+        "PI HOLE (below) — put my two cards here",
+        (12, min(height - 16, cut + 28)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    assigned = zone_mod.assign_zones(detections, image_height=height, hole_from=hole_from)
+    hole_txt = ",".join(item.get("card", "?") for item in assigned["pi_hole"]) or "-"
+    board_txt = ",".join(item.get("card", "?") for item in assigned["board"]) or "-"
+    lines = list(status_lines or [])
+    if window:
+        lines.append(f"waiting: {window}  stable {stable_count}/{stable_need}")
+    else:
+        lines.append("camera idle (no card window open)")
+    lines.append(f"hole: {hole_txt}")
+    lines.append(f"board: {board_txt}")
+    for index, line in enumerate(lines):
+        origin = (12, 32 + index * 28)
+        cv2.putText(out, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(out, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
+    return out
+
+
 def save_frame(image: np.ndarray, path: str) -> str:
     """Save a BGR frame to disk. Creates parent directories. Returns path."""
     parent = os.path.dirname(os.path.abspath(path))

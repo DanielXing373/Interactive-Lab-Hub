@@ -12,7 +12,9 @@ stay in the same phase.
 
 The microphone and camera run together. After deal, and again when a street
 closes, the camera reads until the same cards repeat. That reading is locked
-for the street. Pass --no-camera to use the microphone alone.
+for the street. Pass --no-camera to use the microphone alone. With the camera
+on, open http://<pi-ip>:8080 to preview the frame, zone line, and card labels
+(--preview-port 0 disables it).
 
 ``alt_personality`` is the switch for a second persona. Both personas use the
 same sentences for now. Hole cards and win rate stay truthful either way.
@@ -227,7 +229,13 @@ def bound_amount(text: str) -> int | None | tuple[int, ...]:
 
 
 def _looks_like_question(text: str) -> bool:
-    return bool(re.search(r"\b(what|whats|how|why)\b", text) or re.search(r"\b(odds|equity|chance)\b", text) or "win rate" in text)
+    return bool(
+        re.search(r"\b(what|whats|how|why|where|status)\b", text)
+        or re.search(r"\b(odds|equity|chance|waiting|next)\b", text)
+        or "win rate" in text
+        or "your turn" in text
+        or "my turn" in text
+    )
 
 
 def _verbs(text: str) -> list[str]:
@@ -239,6 +247,10 @@ _REPEAT_EN = re.compile(
     r"didn t (hear|catch)|did not (hear|catch)|one more time|i missed that"
 )
 _REPEAT_ZH = ("没听清", "再说一遍", "再来一遍", "再讲一遍", "重复一下", "重复一遍", "重复")
+_ECHO_STOP = {
+    "a", "an", "the", "and", "to", "of", "is", "are", "am", "i", "you", "me", "my",
+    "we", "it", "for", "in", "on", "or",
+}
 
 
 def _is_repeat(raw: str) -> bool:
@@ -246,6 +258,32 @@ def _is_repeat(raw: str) -> bool:
         return True
     return bool(_REPEAT_EN.search(_normalize(raw)))
 
+
+def _is_echo(heard: str, spoken: str | None) -> bool:
+    """True when the mic likely caught the Pi's own last line.
+
+    Short commands like ``I have 1500`` must not match a longer reply that
+    merely shares a few words. Real echo is a long noisy paraphrase of the
+    previous TTS line.
+    """
+    if not spoken:
+        return False
+    a = _normalize(heard)
+    b = _normalize(spoken)
+    if not a or not b:
+        return False
+    if len(a) >= 20 and (a in b or b in a):
+        return True
+    left = set(a.split()) - _ECHO_STOP
+    right = set(b.split()) - _ECHO_STOP
+    if len(left) < 4:
+        return False
+    overlap = len(left & right)
+    if overlap / len(left) < 0.7:
+        return False
+    if len(right) >= 4 and overlap / len(right) < 0.35:
+        return False
+    return True
 
 class Player:
     """One sitting: blinds and stacks outside the hand, phase inside it."""
@@ -278,6 +316,7 @@ class Player:
     def _clear_cards(self) -> None:
         self.pot = 0
         self.hole: list[Card] = []
+        self.human_hole: list[Card] = []
         self.board: list[Card] = []
         self.street_in = {"human": 0, "pi": 0}
         self.acted = {"human": False, "pi": False}
@@ -313,14 +352,19 @@ class Player:
         )
 
     def on_heard(self, raw: str) -> str:
+        text = raw.strip()
+        if not text:
+            return ""
+        if _is_echo(text, self.last_spoken):
+            return ""
         user_phase = self.phase
-        if _is_repeat(raw):
+        if _is_repeat(text):
             reply = self.last_spoken or "I have not said anything yet."
         else:
-            reply = self._respond(raw)
+            reply = self._respond(text)
             if reply.startswith("New hand."):
                 self.hand_start = len(self.lines)
-        self._append(user_phase, "You", raw.strip())
+        self._append(user_phase, "You", text)
         self._append(self.phase, "Pi", reply)
         if user_phase is not Phase.IDLE and self.phase is Phase.IDLE:
             self._save_hand()
@@ -379,6 +423,14 @@ class Player:
     def _query(self, text: str) -> str | None:
         if not _looks_like_question(text):
             return None
+        if any(
+            phrase in text
+            for phrase in (
+                "wait", "waiting", "next", "status", "where are we",
+                "what now", "what should", "your turn", "my turn", "doing",
+            )
+        ):
+            return self._say(self._waiting_line())
         if any(word in text for word in ("win rate", "equity", "odds", "chance")):
             return self._say(self._equity_line())
         if any(word in text for word in ("board", "table", "community")):
@@ -391,7 +443,37 @@ class Player:
             return self._say(self._chips_line("human"))
         if "chip" in text or "stack" in text:
             return self._say(self._chips_line("pi"))
-        return self._say("Ask about chips, the board, my cards, or my win rate.")
+        return self._say(
+            "Ask what I am waiting for, or about chips, the board, my cards, or my win rate."
+        )
+
+    def _waiting_line(self) -> str:
+        """Plain-English answer for 'what are you waiting for'."""
+        if self.phase is Phase.AWAIT_AMOUNT:
+            return "I still need the bet amount."
+        if self.phase is Phase.AWAIT_CONFIRM:
+            return "Say one of those amounts again, or say no."
+        phase = self._live()
+        if phase is Phase.IDLE:
+            if self.chips["human"] is None or self.chips["pi"] is None:
+                return "Tell me both stacks, then say deal."
+            return "Say deal when you are ready."
+        if phase is Phase.SHOWDOWN:
+            return "Showdown. Tell me your two cards."
+        if len(self.hole) != 2:
+            return "I am waiting for my two hole cards. Take your time."
+        if self._betting_closed():
+            if phase is Phase.RIVER:
+                return "This street is closed. Showdown is next."
+            nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[phase.value]
+            return f"I am waiting for the {nxt}. Take your time."
+        if self._pi_should_act():
+            return "It is my turn to act."
+        gap = self.street_in["pi"] - self.street_in["human"]
+        street = phase.value
+        if gap > 0:
+            return f"We are on the {street}. It is {gap} to call. Your action."
+        return f"We are on the {street}. Your action."
 
     def _chips_line(self, who: str) -> str:
         stack = self.chips[who]
@@ -463,8 +545,13 @@ class Player:
         if cards:
             return None
         amount = bound_amount(text)
+        looks_stack = "stack" in text or re.search(r"\b(your stack|you have|my stack|i have)\b", text)
+        if self.phase is not Phase.IDLE:
+            if looks_stack and (isinstance(amount, int) or "stack" in text):
+                return self._say("Stacks are already in this hand.")
+            return None
         if isinstance(amount, tuple) or not isinstance(amount, int):
-            if "stack" in text or re.search(r"\b(you have|i have)\b", text):
+            if looks_stack:
                 return self._say("Tell me one stack size.")
             return None
         if re.search(r"\b(your stack|you have)\b", text):
@@ -473,8 +560,6 @@ class Player:
             who = "human"
         else:
             return None
-        if self.phase is not Phase.IDLE:
-            return self._say("Stacks are already in this hand.")
         if amount < self.big_blind:
             return self._say("A stack has to cover at least the big blind.")
         self.chips[who] = amount
@@ -495,7 +580,8 @@ class Player:
         self.acted = {"human": False, "pi": False}
         self.phase = Phase.PREFLOP
         return self._say(
-            f"New hand. You post {self.small_blind}. I post {self.big_blind}. Tell me my cards."
+            f"New hand. You post {self.small_blind}. I post {self.big_blind}. "
+            "I am waiting for my two hole cards. Take your time."
         )
 
     def _on_street(self, text: str) -> str:
@@ -518,19 +604,22 @@ class Player:
         if len(verbs) > 1:
             return self._say("Say one action: fold, check, call, bet, or raise.")
         if not verbs:
+            if len(self.hole) != 2 or self._betting_closed():
+                return self._say(self._waiting_line())
             if extract_cards(text):
                 return self._say("Tell me which street those cards belong to.")
-            return self._say("Say fold, check, call, bet, or raise.")
+            return self._say("Say fold, check, call, bet, or raise. Or ask what I am waiting for.")
+        if len(self.hole) != 2:
+            return self._say("I am waiting for my two hole cards before anyone acts.")
         if self._betting_closed():
             return self._say(self._closed_hint())
         return self._human_action(verbs[0], text)
-
     def _maybe_hole(self, text: str) -> str | None:
         if not re.search(r"\b(your cards|you have|your hand)\b", text):
             return None
-        if not extract_cards(text) and "card" not in text and "hand" not in text:
-            return None
         cards = extract_cards(text)
+        if not cards:
+            return None
         if len(cards) != 2:
             return self._say("Tell me exactly two cards.")
         return self._set_hole(cards)
@@ -584,11 +673,10 @@ class Player:
         if self.chips["human"] == 0 or self.chips["pi"] == 0:
             if self.phase is Phase.RIVER:
                 self.phase = Phase.SHOWDOWN
-                return self._say(f"{lead} Showdown. Tell me who won.")
+                return self._say(f"{lead} Showdown. Tell me your two cards.")
             nxt = {Phase.FLOP: "turn", Phase.TURN: "river"}[self.phase]
-            return self._say(f"{lead} Tell me the {nxt}.")
+            return self._say(f"{lead} I am waiting for the {nxt}. Take your time.")
         return self._finish(lead)
-
     def _human_action(self, verb: str, text: str) -> str:
         if len(self.hole) != 2:
             return self._say("Tell me my cards before I act.")
@@ -761,9 +849,9 @@ class Player:
 
     def _closed_hint(self) -> str:
         if self.phase is Phase.RIVER:
-            return "Showdown is next. Say who won after the river action is done."
+            return "Showdown is next. Tell me your two cards after the river action is done."
         nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[self.phase.value]
-        return f"This street is closed. Tell me the {nxt}."
+        return f"This street is closed. I am waiting for the {nxt}."
 
     def _finish(self, lead: str) -> str:
         parts = [lead]
@@ -831,31 +919,52 @@ class Player:
             return ""
         if self.phase is Phase.RIVER:
             self.phase = Phase.SHOWDOWN
-            return "Showdown. Tell me who won."
+            return "Showdown. Tell me your two cards."
         nxt = {"preflop": "flop", "flop": "turn", "turn": "river"}[self.phase.value]
-        return f"Tell me the {nxt}."
+        return f"I am waiting for the {nxt}. Take your time."
 
     def _on_showdown(self, text: str) -> str:
-        if re.search(r"\b(you win|you won)\b", text):
-            return self._award("pi")
-        if re.search(r"\b(i win|i won)\b", text):
-            return self._award("human")
-        if re.search(r"\b(split|tie|chop)\b", text):
-            return self._split()
-        if re.search(r"\b(deal|new hand)\b", text):
-            return self._say("Tell me who won before the next deal.")
-        return self._say("Tell me who won: you, me, or split.")
+        if re.search(r"\b(deal|new hand)\b", text) and not extract_cards(text):
+            return self._say("Tell me your two cards before the next deal.")
+        cards = extract_cards(text)
+        looks_mine = bool(re.search(r"\b(my cards|my hand|i have)\b", text))
+        if not cards and not looks_mine:
+            return self._say("Showdown. Tell me your two cards.")
+        if len(cards) != 2:
+            return self._say("Tell me exactly two cards.")
+        return self._judge(cards)
 
-    def _award(self, who: str) -> str:
+    def _judge(self, human_cards: list[Card]) -> str:
+        if len(self.hole) != 2 or len(self.board) != 5:
+            return self._say("The board is not complete.")
+        if len(set(human_cards)) != 2:
+            return self._say("A card cannot appear twice.")
+        used = set(self.hole + self.board)
+        if any(card in used for card in human_cards):
+            return self._say("That card is already out.")
+        self.human_hole = human_cards
+        pi_rank = best_rank(self.hole + self.board)
+        human_rank = best_rank(human_cards + self.board)
+        if pi_rank > human_rank:
+            return self._award("pi", preface=f"You have {human_cards[0]} and {human_cards[1]}. I win.")
+        if human_rank > pi_rank:
+            return self._award("human", preface=f"You have {human_cards[0]} and {human_cards[1]}. You win.")
+        return self._split(preface=f"You have {human_cards[0]} and {human_cards[1]}.")
+
+    def _award(self, who: str, preface: str | None = None) -> str:
         won = self.pot
         self.chips[who] += won
         self.pot = 0
         self._end_hand()
         if who == "pi":
-            return self._say(f"I take the pot of {won}.")
-        return self._say(f"You take the pot of {won}.")
+            line = f"I take the pot of {won}."
+        else:
+            line = f"You take the pot of {won}."
+        if preface:
+            return self._say(f"{preface} {line}")
+        return self._say(line)
 
-    def _split(self) -> str:
+    def _split(self, preface: str | None = None) -> str:
         human_share = self.pot // 2 + self.pot % 2
         pi_share = self.pot // 2
         self.chips["human"] += human_share
@@ -863,10 +972,13 @@ class Player:
         self.pot = 0
         self._end_hand()
         odd = " You take the odd chip." if human_share != pi_share else ""
-        return self._say(f"Split. You take {human_share}. I take {pi_share}.{odd}")
+        line = f"Split. You take {human_share}. I take {pi_share}.{odd}"
+        if preface:
+            return self._say(f"{preface} {line}")
+        return self._say(line)
 
     def _known_cards(self) -> set[Card]:
-        return set(self.hole + self.board)
+        return set(self.hole + self.board + self.human_hole)
 
 
 def _check_evaluator() -> None:
@@ -890,6 +1002,22 @@ def _check_evaluator() -> None:
     odd.pot = 31
     assert odd._split() == "Split. You take 16. I take 15. You take the odd chip."
     assert odd.chips == {"human": 16, "pi": 15}
+    judged = Player()
+    judged.chips = {"human": 100, "pi": 100}
+    judged.hole = [card("two of clubs"), card("three of diamonds")]
+    judged.board = [
+        card("ace of hearts"),
+        card("king of hearts"),
+        card("queen of hearts"),
+        card("jack of hearts"),
+        card("nine of clubs"),
+    ]
+    judged.pot = 40
+    judged.phase = Phase.SHOWDOWN
+    assert judged._judge([card("two of diamonds"), card("three of clubs")]).startswith(
+        "You have two of diamonds and three of clubs. Split."
+    )
+    assert judged.chips == {"human": 120, "pi": 120}
 
 
 def _play(lines: list[str], alt_personality: bool = False) -> list[str]:
@@ -906,6 +1034,15 @@ def _expect(name: str, lines: list[str], replies: list[str], alt_personality: bo
             if want != got
         )
         raise AssertionError(f"{name}\n{details}")
+
+
+DEAL_LINE = (
+    "New hand. You post 10. I post 20. "
+    "I am waiting for my two hole cards. Take your time."
+)
+WAIT_FLOP = "I am waiting for the flop. Take your time."
+WAIT_TURN = "I am waiting for the turn. Take your time."
+WAIT_RIVER = "I am waiting for the river. Take your time."
 
 
 def _check_dialogues() -> None:
@@ -954,7 +1091,7 @@ def _check_dialogues() -> None:
         "Tell me the small blind and the big blind.",
         "A stack has to cover at least the big blind.",
         "I have 1500 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
     ])
 
     player = Player()
@@ -969,7 +1106,7 @@ def _check_dialogues() -> None:
         "I raise your 20 to 50",
     ]
     replies = [player.on_heard(line) for line in script]
-    assert replies[2] == "New hand. You post 10. I post 20. Tell me my cards."
+    assert replies[2] == DEAL_LINE
     assert replies[3] == "I have ten of spades and seven of hearts. Your action."
     assert replies[4] == "The pot is 30."
     assert replies[5] == "I have 1480 chips. The pot is 30."
@@ -977,6 +1114,26 @@ def _check_dialogues() -> None:
     assert replies[7].startswith("You raise to 50.")
     assert player.street_in["human"] == 50
     assert player.chips["human"] == 1450
+
+    waiting = Player()
+    for line in ("you have 1500", "I have 1500", "deal"):
+        waiting.on_heard(line)
+    # Echo of the deal line must not steal the turn.
+    assert waiting.on_heard(
+        "New hand. You post 10. I post 20. Tell me my cards."
+    ) == ""
+    assert waiting.phase is Phase.PREFLOP
+    assert waiting.hole == []
+    assert waiting.on_heard("what are you waiting for") == (
+        "I am waiting for my two hole cards. Take your time."
+    )
+    assert waiting.on_heard("I check") == (
+        "I am waiting for my two hole cards before anyone acts."
+    )
+    # Mid-hand "you have ..." without real cards is not a stack command.
+    assert waiting.on_heard("You have not told me my cards.") == (
+        "I am waiting for my two hole cards. Take your time."
+    )
 
     _expect("raise needs a number, and a question does not spend chips", [
         "you have 1500",
@@ -990,7 +1147,7 @@ def _check_dialogues() -> None:
     ], [
         "I have 1500 chips.",
         "You have 1500 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "I have ace of clubs and ace of diamonds. Your action.",
         "Raise to how many?",
         "I have ace of clubs and ace of diamonds. I still need the amount.",
@@ -1010,7 +1167,7 @@ def _check_dialogues() -> None:
     ], [
         "I have 1500 chips.",
         "You have 1500 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "I have ace of clubs and king of diamonds. Your action.",
         "Do you mean 40 or 50? Say the amount again.",
         "The pot is 30. Say the amount again.",
@@ -1038,7 +1195,7 @@ def _check_dialogues() -> None:
     ], [
         "I have 1500 chips.",
         "You have 1500 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "Tell me exactly two cards.",
         "A card cannot appear twice.",
         "I have ace of spades and king of hearts. Your action.",
@@ -1046,7 +1203,7 @@ def _check_dialogues() -> None:
         "A raise must be to at least 40.",
         "It is 10 to call.",
         "Say one action: fold, check, call, bet, or raise.",
-        "You call. I check. Tell me the flop.",
+        f"You call. I check. {WAIT_FLOP}",
         "The turn does not come now.",
         "The flop needs three cards.",
         "That card is already out.",
@@ -1054,7 +1211,7 @@ def _check_dialogues() -> None:
         "Stacks are already in this hand.",
     ])
 
-    _expect("checkdown, showdown questions, stacks survive the next hand", [
+    _expect("checkdown, showdown judge, stacks survive the next hand", [
         "you have 200",
         "I have 200",
         "deal",
@@ -1069,7 +1226,7 @@ def _check_dialogues() -> None:
         "what is your win rate",
         "what is on the board",
         "deal",
-        "I win",
+        "my cards are the ace of clubs and the ace of diamonds",
         "how many chips do you have",
         "how many chips do I have",
         "deal",
@@ -1078,27 +1235,27 @@ def _check_dialogues() -> None:
     ], [
         "I have 200 chips.",
         "You have 200 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "I have seven of hearts and two of clubs. Your action.",
-        "You call. I check. Tell me the flop.",
+        f"You call. I check. {WAIT_FLOP}",
         "The board is ace of spades, king of diamonds, queen of clubs. I check.",
-        "You check. Tell me the turn.",
+        f"You check. {WAIT_TURN}",
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts. I check.",
-        "You check. Tell me the river.",
+        f"You check. {WAIT_RIVER}",
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts, nine of clubs. I check.",
-        "You check. Showdown. Tell me who won.",
+        "You check. Showdown. Tell me your two cards.",
         "About 9 percent against a random hand.",
         "The board is ace of spades, king of diamonds, queen of clubs, three of hearts, nine of clubs.",
-        "Tell me who won before the next deal.",
-        "You take the pot of 40.",
+        "Tell me your two cards before the next deal.",
+        "You have ace of clubs and ace of diamonds. You win. You take the pot of 40.",
         "I have 180 chips. Blinds are 10 and 20.",
         "You have 220 chips. Blinds are 10 and 20.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "I have ace of clubs and ace of diamonds. Your action.",
         "You fold. I take the pot of 30.",
     ])
 
-    _expect("split, all in, and a weak fold", [
+    _expect("all in judged by cards, and a weak fold", [
         "you have 40",
         "I have 40",
         "deal",
@@ -1108,18 +1265,18 @@ def _check_dialogues() -> None:
         "flop is the two of clubs, the three of diamonds, and the four of hearts",
         "turn is the five of spades",
         "river is the nine of clubs",
-        "split",
+        "my cards are the seven of hearts and the two of diamonds",
     ], [
         "I have 40 chips.",
         "You have 40 chips.",
-        "New hand. You post 10. I post 20. Tell me my cards.",
+        DEAL_LINE,
         "I have ace of spades and ace of hearts. Your action.",
-        "You raise all in. I call all in. Tell me the flop.",
+        f"You raise all in. I call all in. {WAIT_FLOP}",
         "I am all in. The pot is 80.",
-        "The board is two of clubs, three of diamonds, four of hearts. Tell me the turn.",
-        "The board is two of clubs, three of diamonds, four of hearts, five of spades. Tell me the river.",
-        "The board is two of clubs, three of diamonds, four of hearts, five of spades, nine of clubs. Showdown. Tell me who won.",
-        "Split. You take 40. I take 40.",
+        f"The board is two of clubs, three of diamonds, four of hearts. {WAIT_TURN}",
+        f"The board is two of clubs, three of diamonds, four of hearts, five of spades. {WAIT_RIVER}",
+        "The board is two of clubs, three of diamonds, four of hearts, five of spades, nine of clubs. Showdown. Tell me your two cards.",
+        "You have seven of hearts and two of diamonds. I win. I take the pot of 80.",
     ])
 
     folded = _play([
@@ -1179,7 +1336,7 @@ def _check_record() -> None:
         assert len(player.hands) == 1
         hand = (directory / "hand_001.txt").read_text(encoding="utf-8")
         assert "[idle] You: deal" in hand
-        assert "[preflop] Pi: New hand. You post 10. I post 20. Tell me my cards." in hand
+        assert "[preflop] Pi: New hand. You post 10. I post 20. I am waiting for my two hole cards. Take your time." in hand
         assert "[preflop] You: I raise" in hand
         assert "You fold. I take the pot of 30." in hand
         assert "you have 1500" not in hand
@@ -1219,18 +1376,35 @@ def run_text(alt_personality: bool, trace: bool) -> None:
             print(player.status())
 
 
-def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None:
-    """Read the camera only while a card window is open. Speak from the mic thread."""
+def _watch_cards(
+    player: Player,
+    speech_q,
+    stop,
+    frames: int,
+    flip: str,
+    preview_port: int | None = 8080,
+) -> None:
+    """Always stream the camera. Lock cards only while a window is open."""
     vision_dir = Path(__file__).resolve().parent.parent / "card vision"
     if str(vision_dir) not in sys.path:
         sys.path.insert(0, str(vision_dir))
     import cv2
     import card_vision
+    from browser_preview import BrowserPreview
     from vision_bridge import VisionBridge
 
     cap = card_vision.open_usb_camera()
     bridge = VisionBridge(frames=frames)
     flips = {"horizontal": 1, "vertical": 0, "both": -1}
+    preview = None
+    if preview_port:
+        preview = BrowserPreview(preview_port)
+        url = preview.start()
+        print(f"Camera preview: {url}", flush=True)
+        print(
+            "Put the Pi hole cards BELOW the yellow line. Board cards stay ABOVE it.",
+            flush=True,
+        )
     try:
         while not stop.is_set():
             ok, frame = cap.read()
@@ -1240,15 +1414,34 @@ def _watch_cards(player: Player, speech_q, stop, frames: int, flip: str) -> None
             if flip in flips:
                 frame = cv2.flip(frame, flips[flip])
             player.refresh_vision_window()
-            if player.vision_window is None:
-                stop.wait(0.2)
-                continue
+            window = player.vision_window
+            # Always detect so the preview shows what the model sees while you deal.
             detections = card_vision.detect_cards(frame)
             zones = card_vision.assign_zones(detections, image_height=frame.shape[0])
-            reply = bridge.observe(player, zones)
-            if reply:
-                speech_q.put(reply)
+            reply = None
+            if window is not None:
+                reply = bridge.observe(player, zones)
+                if reply:
+                    speech_q.put(reply)
+            if preview is not None:
+                view = card_vision.annotate_poker_preview(
+                    frame,
+                    detections,
+                    window=window,
+                    stable_count=bridge.stable.count,
+                    stable_need=frames,
+                    status_lines=[
+                        f"phase={player.phase.value}",
+                        f"locked={','.join(sorted(player.vision_locked)) or '-'}",
+                        bridge.last_reason,
+                    ],
+                )
+                preview.update(view)
+            else:
+                stop.wait(0.05)
     finally:
+        if preview is not None:
+            preview.stop()
         cap.release()
 
 
@@ -1259,9 +1452,14 @@ def run_voice(
     voice: Path,
     min_silence: float,
     camera: bool = True,
-    vision_frames: int = 15,
+    vision_frames: int = 8,
     flip: str = "horizontal",
+    preview_port: int | None = 8080,
 ) -> None:
+    import queue
+    import threading
+    import time
+
     import numpy as np
     import sherpa_onnx
     import sounddevice as sd
@@ -1280,36 +1478,61 @@ def run_voice(
     config.silero_vad.model = str(vad_model)
     config.silero_vad.min_silence_duration = min_silence
     config.sample_rate = SAMPLE_RATE
-    vad = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=30)
     window = config.silero_vad.window_size
 
     stream_holder: dict = {}
+    vad_holder: dict = {
+        "vad": sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=30)
+    }
+    speaking = threading.Event()
+    listen_after = 0.0
+    buffer = np.empty(0, dtype=np.float32)
+
+    def flush_mic() -> None:
+        mic = stream_holder.get("stream")
+        if mic is None:
+            return
+        try:
+            for _ in range(8):
+                available = mic.read_available
+                if not available:
+                    break
+                mic.read(available)
+        except Exception:
+            pass
+
+    def reset_listen() -> None:
+        nonlocal buffer, listen_after
+        buffer = np.empty(0, dtype=np.float32)
+        vad_holder["vad"] = sherpa_onnx.VoiceActivityDetector(
+            config, buffer_size_in_seconds=30
+        )
+        listen_after = time.monotonic() + 0.4
 
     def say(text: str) -> None:
-        print(f"Pi: {text}", flush=True)
-        for audio_chunk in piper.synthesize(text):
-            audio = np.frombuffer(audio_chunk.audio_int16_bytes, dtype=np.int16)
-            sd.play(audio, samplerate=audio_chunk.sample_rate)
-            sd.wait()
-        mic = stream_holder.get("stream")
-        if mic is not None:
-            try:
-                available = mic.read_available
-                if available:
-                    mic.read(available)
-            except Exception:
-                pass
-
-    import queue
-    import threading
+        nonlocal listen_after
+        if not text:
+            return
+        speaking.set()
+        try:
+            print(f"Pi: {text}", flush=True)
+            for audio_chunk in piper.synthesize(text):
+                audio = np.frombuffer(audio_chunk.audio_int16_bytes, dtype=np.int16)
+                sd.play(audio, samplerate=audio_chunk.sample_rate)
+                sd.wait()
+            flush_mic()
+            time.sleep(0.2)
+            flush_mic()
+        finally:
+            reset_listen()
+            speaking.clear()
 
     speech_q: queue.Queue[str] = queue.Queue()
     stop = threading.Event()
-    watcher = None
     if camera:
         watcher = threading.Thread(
             target=_watch_cards,
-            args=(player, speech_q, stop, vision_frames, flip),
+            args=(player, speech_q, stop, vision_frames, flip, preview_port),
             daemon=True,
         )
         watcher.start()
@@ -1323,7 +1546,6 @@ def run_voice(
                 return
 
     say(player.greeting())
-    buffer = np.empty(0, dtype=np.float32)
     samples_per_read = int(0.1 * SAMPLE_RATE)
     try:
         with sd.InputStream(channels=1, dtype="float32", samplerate=SAMPLE_RATE) as stream:
@@ -1331,18 +1553,30 @@ def run_voice(
             while True:
                 drain()
                 chunk, _ = stream.read(samples_per_read)
+                if speaking.is_set() or time.monotonic() < listen_after:
+                    # Drop speaker bleed and the short settle window after TTS.
+                    buffer = np.empty(0, dtype=np.float32)
+                    continue
                 buffer = np.concatenate([buffer, chunk.reshape(-1)])
+                vad = vad_holder["vad"]
                 while len(buffer) > window:
                     vad.accept_waveform(buffer[:window])
                     buffer = buffer[window:]
                 while not vad.empty():
                     utterance = np.array(vad.front.samples, dtype=np.float32)
                     vad.pop()
+                    if speaking.is_set() or time.monotonic() < listen_after:
+                        continue
                     segments, _ = recognizer.transcribe(utterance, beam_size=1)
                     heard = " ".join(part.text.strip() for part in segments)
-                    if heard:
-                        print(f"Heard: {heard}", flush=True)
-                        say(player.on_heard(heard))
+                    if not heard:
+                        continue
+                    print(f"Heard: {heard}", flush=True)
+                    reply = player.on_heard(heard)
+                    if reply:
+                        say(reply)
+                    else:
+                        print("(ignored echo or empty)", flush=True)
     finally:
         stop.set()
 
@@ -1359,7 +1593,13 @@ def main() -> None:
     parser.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     parser.add_argument("--min-silence", type=float, default=BET_SILENCE)
     parser.add_argument("--no-camera", action="store_true", help="microphone only")
-    parser.add_argument("--vision-frames", type=int, default=15)
+    parser.add_argument("--vision-frames", type=int, default=8)
+    parser.add_argument(
+        "--preview-port",
+        type=int,
+        default=8080,
+        help="browser MJPEG preview port (default 8080; 0 disables)",
+    )
     parser.add_argument(
         "--flip",
         choices=("horizontal", "vertical", "both", "none"),
@@ -1388,6 +1628,7 @@ def main() -> None:
         camera=not args.no_camera,
         vision_frames=args.vision_frames,
         flip=args.flip,
+        preview_port=args.preview_port or None,
     )
 
 

@@ -3,7 +3,9 @@
 The camera sits on the Pi's side of the table. In the 1280x720 sample,
 the two hole cards sit low in the frame (y about 590-605) and the board
 sits higher (y about 268-378). The cut is 68% of the image height.
-Human cards are face down and are not a third band in that sample.
+The board zone commonly holds five card backs; faces still down read as
+Unknown until that street is revealed. Human cards are face down and are
+not a third band in that sample.
 """
 
 from __future__ import annotations
