@@ -2,7 +2,7 @@
 
 **NAMES OF COLLABORATORS HERE**
 
-I used cursor as a coding assistant. 
+I used cursor as a coding assistant, also for formatting this README. 
 
 I borrowed and renovated a 9-year-old repo from EdjeElectronics for card recognition part of this project. I made my version of card arrangement, part of the recognition logic, and locking pattern for the Texas Hold'em game. 
 
