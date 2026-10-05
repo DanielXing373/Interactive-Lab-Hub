@@ -281,13 +281,13 @@ Answer the following:
 \*\**The system recognizes each state correctly, and can make moves based on the given probability system. However, the moves it take are always the same if the input of the system is the same. As a result, we can predict its moves, which makes it easy to game the system. *\*\*
 
 ### What worked well about the controller and what didn't?
-\*\**When the verbal input is not clear enough, the controller will ask for the input again with some recommended choices for the user. Therefore, even if there is a mistake, it is easy to pick up from the it. It didn't work well when recognizing numbers as usual, and also had problems pinpointing key phrases that lead to other states of the system. *\*\*
+\*\**When the audio input is not clear enough, the controller will ask for the input again with some recommended choices for the user. Therefore, even if there is a mistake, it is easy to recover from it. The system didn't work well when recognizing numbers as always, and also had problems pinpointing key words that lead to state changes of the system. *\*\*
 
 ### What lessons can you take away from the WoZ interactions for designing a more autonomous version of the system?
 \*\**One thing I added to Pi is the prompting of a answerable question. During WoZ, people asked lots of surprising questions. And due to the limited time for development, I decide to let Pi answer only some of them, and prompting the user to ask other questions when it can't understand the verbal input. *\*\*
 
 ### How could you use your system to create a dataset of interaction? What other sensing modalities would make sense to capture?
-\*\**Documenting the state of the system, and collecting people's reaction to the system, whether it is a question, a change on the cards on the table, or something else. It might be benefitial to collect how long have been people thinking or waiting. Because during the actual interaction, I found sonme of the timing adn wording are still improper, including asking simple questions with long wording, lacking of signs that signal a question and so on. I've implemented a "take your time" response during part of the interaction, and I found that quite reliefing when know that the Pi could wait for my move. *\*\*
+\*\**Documenting the state of the system, and collecting people's reaction to the system, whether it is a question, a change on the cards on the table, or something else. It might be benefitial to collect how long have been people thinking or waiting. Because during the actual interaction, I found some of the timing and wording are still improper, including asking simple questions with long phrases, lacking of signs that signal a question and so on. I've implemented a "take your time" phrase during part of the interaction, and I found that to be quite relieving when knowing that the Pi could wait for my move. *\*\*
 
 <details>
   <summary><strong>Submission Cleanup Reminder (Click to Expand)</strong></summary>
