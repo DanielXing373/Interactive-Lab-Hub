@@ -5,17 +5,17 @@ Delivery crawl: sequential Fast gait + front-mounted VCNL4040 leg detection.
 The sensor faces forward and treats a nearby person/leg as the delivery target.
 When proximity stays at or above DELIVERY_THRESHOLD for CONFIRM_READINGS
 consecutive samples, delivery is confirmed permanently:
-  - stop issuing new servo movement commands
-  - hold both servos at their current angles
-  - print DELIVERY COMPLETE
-  - do NOT resume if the target moves away
-  - do NOT auto-return to neutral (avoids unwanted motion after delivery)
+  1) stop issuing new crawl commands (hold current pose briefly)
+  2) CH0 gradually to 90 while CH1 holds
+  3) CH1 gradually to 90 while CH0 holds at 90
+  4) hold both at 90 for 1 second
+  5) print DELIVERY COMPLETE and exit (no crawl resume)
 
-Ctrl+C still performs a sequential return to neutral.
+Neutral return uses 1 deg steps / 0.05 s delays, SERVO_SWING=180,
+one servo at a time. Ctrl+C also returns to neutral sequentially.
 
 Gait (strictly sequential, Fast preset from coordinated_gait_test.py):
   CH1 tilt A -> CH0 stroke A -> CH1 tilt B -> CH0 stroke B -> repeat
-  One servo moves at a time. SERVO_SWING=180.
 
 Usage (from Lab 4, with venv activated):
   python sensor_crawl_test.py --sensor-only
@@ -152,8 +152,10 @@ def read_proximity():
 def check_delivery(prox):
     """
     Require CONFIRM_READINGS consecutive samples >= DELIVERY_THRESHOLD.
-    On confirm: set delivery_complete permanently, print DELIVERY COMPLETE.
-    Returns True if delivery is complete (crawl must stop).
+    On confirm: set delivery_complete permanently and stop crawl commands.
+    Does NOT print DELIVERY COMPLETE yet -- caller runs complete_delivery()
+    to return to neutral first.
+    Returns True if delivery is confirmed (crawl must stop).
     """
     global delivery_hit_count, delivery_complete, motion_mode
 
@@ -167,8 +169,8 @@ def check_delivery(prox):
         if delivery_hit_count >= CONFIRM_READINGS:
             delivery_complete = True
             motion_mode = "delivered"
-            print("DELIVERY COMPLETE")
-            print("Holding pose ch0=%d ch1=%d (no auto-resume, no auto-neutral)" % (
+            print("Delivery confirmed. Stopping crawl.")
+            print("Preserving pose ch0=%d ch1=%d before resting return" % (
                 front_angle, rear_angle))
             return True
     else:
@@ -180,8 +182,34 @@ def check_delivery(prox):
     return False
 
 
-def crawl_allowed():
-    return not delivery_complete
+def complete_delivery(hat):
+    """
+    After confirmation: keep current pose, then sequential rest return:
+      CH0 -> 90 (CH1 holds), then CH1 -> 90 (CH0 holds),
+      hold 1 s at 90/90, print DELIVERY COMPLETE, do not resume crawl.
+    """
+    print("Delivery rest sequence: sequential return to 90/90")
+    print("STATE D1: MOVING CH0 to 90; CH1 holds at %d" % rear_angle)
+    move_front_to(
+        hat, FRONT_NEUTRAL, "D1 CH0 -> 90",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY,
+        check_sensor=False)
+    time.sleep(STATE_PAUSE)
+
+    print("STATE D2: MOVING CH1 to 90; CH0 holds at 90")
+    move_rear_to(
+        hat, REAR_NEUTRAL, "D2 CH1 -> 90",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY,
+        check_sensor=False)
+    time.sleep(STATE_PAUSE)
+
+    set_front(hat, FRONT_NEUTRAL, "D3 HOLD CH0")
+    set_rear(hat, REAR_NEUTRAL, "D3 HOLD CH1")
+    print("Holding resting posture for %.1f s..." % NEUTRAL_HOLD)
+    time.sleep(NEUTRAL_HOLD)
+    set_front(hat, FRONT_NEUTRAL, "D3 HOLD CH0")
+    set_rear(hat, REAR_NEUTRAL, "D3 HOLD CH1")
+    print("DELIVERY COMPLETE")
 
 
 # =============================================================================
@@ -353,7 +381,7 @@ def run_sensor_only():
             prox = read_proximity()
             done = check_delivery(prox)
             if done:
-                status = "DELIVERY COMPLETE (permanent)"
+                status = "CONFIRMED (would rest then DELIVERY COMPLETE)"
             elif prox >= DELIVERY_THRESHOLD:
                 status = "NEAR candidate %d/%d" % (
                     delivery_hit_count, CONFIRM_READINGS)
@@ -362,7 +390,8 @@ def run_sensor_only():
             print("Proximity: %5d  |  mode=%s  |  %s" % (
                 prox, motion_mode, status))
             if done:
-                print("Sensor-only delivery confirmed. Exiting (no servos moved).")
+                print("DELIVERY COMPLETE")
+                print("Sensor-only: no servo motion. Exiting.")
                 return
             time.sleep(0.2)
     except KeyboardInterrupt:
@@ -406,7 +435,8 @@ def main():
         DELIVERY_THRESHOLD, CONFIRM_READINGS))
     print("Gait: sequential alternating crawl; one servo at a time")
     print("Mode: %s" % ("continuous --loop" if loop else "single-cycle --once"))
-    print("On delivery: hold pose, no auto-neutral. Ctrl+C -> neutral.\n")
+    print("On delivery: stop crawl, sequential rest to 90/90, then DELIVERY COMPLETE.")
+    print("Ctrl+C -> sequential return to neutral.\n")
 
     try:
         init_sensor()
@@ -428,7 +458,8 @@ def main():
             print("\n########## SINGLE CYCLE (A + B strokes) ##########")
             delivered = run_one_ab_cycle(hat)
             if delivered:
-                print("Exiting after delivery (pose held; no auto-neutral).")
+                complete_delivery(hat)
+                print("Done.")
                 return
             print("\nSingle-cycle done without delivery. Returning to neutral.")
             return_both_to_neutral(hat, hold=True)
@@ -446,7 +477,7 @@ def main():
                 break
 
         if delivery_complete:
-            print("Crawl terminated after DELIVERY COMPLETE (pose held).")
+            complete_delivery(hat)
         print("Done.")
 
     except KeyboardInterrupt:
@@ -456,6 +487,7 @@ def main():
         except Exception as exc:
             print("Warning: could not return to neutral: %s" % exc, file=sys.stderr)
         print("Done.")
+
 
 
 if __name__ == "__main__":
