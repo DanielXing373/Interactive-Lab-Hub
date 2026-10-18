@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 """
-Obstacle-aware crawl: sequential gait (from coordinated_gait_test.py) +
-SparkFun Qwiic VCNL4040 proximity (from distance_sensor_test.py / qwiic_distance.py).
+Delivery crawl: sequential Fast gait + front-mounted VCNL4040 leg detection.
 
-Does NOT modify coordinated_gait_test.py, distance_sensor_test.py, or delivery_robot.py.
+The sensor faces forward and treats a nearby person/leg as the delivery target.
+When proximity stays at or above DELIVERY_THRESHOLD for CONFIRM_READINGS
+consecutive samples, delivery is confirmed permanently:
+  - stop issuing new servo movement commands
+  - hold both servos at their current angles
+  - print DELIVERY COMPLETE
+  - do NOT resume if the target moves away
+  - do NOT auto-return to neutral (avoids unwanted motion after delivery)
 
-Gait (strictly sequential, Fast preset):
+Ctrl+C still performs a sequential return to neutral.
+
+Gait (strictly sequential, Fast preset from coordinated_gait_test.py):
   CH1 tilt A -> CH0 stroke A -> CH1 tilt B -> CH0 stroke B -> repeat
-  One servo moves at a time. No CH0 reposition before CH1 switches sides.
-
-Proximity (higher = closer):
-  prox > STOP_THRESHOLD   -> hold pose, stop new movement commands
-  prox < RESUME_THRESHOLD -> resume crawling (hysteresis)
-  Mid-band keeps the previous crawl/hold state (no chatter).
-
-On obstacle: hold current commanded angles (no abrupt reset to neutral).
-On resume: continue the same gait phase toward the same target (does not
-reverse a front stroke on the same contact side).
+  One servo moves at a time. SERVO_SWING=180.
 
 Usage (from Lab 4, with venv activated):
   python sensor_crawl_test.py --sensor-only
   python sensor_crawl_test.py --once
   python sensor_crawl_test.py --loop
-  python sensor_crawl_test.py --loop --stop 1000 --resume 700
+  python sensor_crawl_test.py --loop --threshold 20
 """
 
 import sys
@@ -51,21 +50,21 @@ REAR_B = REAR_MIN    # 70
 FRONT_A = FRONT_MAX  # 120
 FRONT_B = FRONT_MIN  # 60
 
-# Proven Fast preset from coordinated_gait_test.py
+# Proven Fast preset
 GAIT_STEP = 3
 GAIT_STEP_DELAY = 0.01
 
-# Conservative return-to-neutral
+# Conservative return-to-neutral (Ctrl+C / unfinished --once only)
 NEUTRAL_STEP = 1
 NEUTRAL_STEP_DELAY = 0.05
 STATE_PAUSE = 0.15
 NEUTRAL_HOLD = 1.0
 
-# Proximity hysteresis (higher proximity = closer object)
-STOP_THRESHOLD = 1000
-RESUME_THRESHOLD = 700
+# Delivery target detection (raw proximity counts, NOT cm)
+# Higher value = closer. Front-mounted sensor aiming at a person's leg.
+DELIVERY_THRESHOLD = 20
+CONFIRM_READINGS = 3  # consecutive samples >= threshold required
 
-# Check sensor every this many gait micro-steps during a long move
 SENSOR_CHECK_EVERY_STEPS = 1
 
 
@@ -76,14 +75,11 @@ front_angle = FRONT_NEUTRAL
 rear_angle = REAR_NEUTRAL
 proximity_sensor = None
 
-# Obstacle FSM: "crawl" or "hold"
-motion_mode = "crawl"
+motion_mode = "crawl"       # "crawl" or "delivered"
+delivery_complete = False
+delivery_hit_count = 0
 
-# Gait phase index into PHASES (resume continues same phase / same target)
-# 0: CH1 -> REAR_A
-# 1: CH0 -> FRONT_A
-# 2: CH1 -> REAR_B
-# 3: CH0 -> FRONT_B
+# Gait phase: 0 CH1->A, 1 CH0->A, 2 CH1->B, 3 CH0->B
 gait_phase = 0
 
 PHASES = (
@@ -130,7 +126,7 @@ def _next_angle(current, target, step_size):
 
 
 # =============================================================================
-# Proximity sensor (reuse course qwiic_proximity pattern)
+# Proximity / delivery confirmation
 # =============================================================================
 
 def init_sensor():
@@ -145,7 +141,7 @@ def init_sensor():
     proximity_sensor.begin()
     prox = proximity_sensor.get_proximity()
     print("Proximity sensor OK. First reading: %d" % prox)
-    print("NOTE: higher proximity = closer object")
+    print("NOTE: higher proximity = closer (raw counts, not cm)")
     return prox
 
 
@@ -153,55 +149,50 @@ def read_proximity():
     return proximity_sensor.get_proximity()
 
 
-def update_obstacle_fsm(prox):
+def check_delivery(prox):
     """
-    Hysteresis:
-      crawl -> hold when prox > STOP_THRESHOLD
-      hold  -> crawl when prox < RESUME_THRESHOLD
-      otherwise keep current mode
-    Returns True if crawling is allowed.
+    Require CONFIRM_READINGS consecutive samples >= DELIVERY_THRESHOLD.
+    On confirm: set delivery_complete permanently, print DELIVERY COMPLETE.
+    Returns True if delivery is complete (crawl must stop).
     """
-    global motion_mode
-    prev = motion_mode
-    if motion_mode == "crawl":
-        if prox > STOP_THRESHOLD:
-            motion_mode = "hold"
+    global delivery_hit_count, delivery_complete, motion_mode
+
+    if delivery_complete:
+        return True
+
+    if prox >= DELIVERY_THRESHOLD:
+        delivery_hit_count += 1
+        print("Delivery candidate %d/%d (proximity=%d >= %d)" % (
+            delivery_hit_count, CONFIRM_READINGS, prox, DELIVERY_THRESHOLD))
+        if delivery_hit_count >= CONFIRM_READINGS:
+            delivery_complete = True
+            motion_mode = "delivered"
+            print("DELIVERY COMPLETE")
+            print("Holding pose ch0=%d ch1=%d (no auto-resume, no auto-neutral)" % (
+                front_angle, rear_angle))
+            return True
     else:
-        if prox < RESUME_THRESHOLD:
-            motion_mode = "crawl"
+        if delivery_hit_count > 0:
+            print("Delivery streak reset (proximity=%d < %d)" % (
+                prox, DELIVERY_THRESHOLD))
+        delivery_hit_count = 0
 
-    if motion_mode != prev:
-        if motion_mode == "hold":
-            print("OBSTACLE - holding pose  (proximity=%d > stop=%d)" % (
-                prox, STOP_THRESHOLD))
-            print("  (no angle reset; waiting until proximity < %d)" % RESUME_THRESHOLD)
-        else:
-            print("CLEAR - resume crawl  (proximity=%d < resume=%d)" % (
-                prox, RESUME_THRESHOLD))
-            print("  (continuing gait phase %d toward same target)" % gait_phase)
-    return motion_mode == "crawl"
+    return False
 
 
-def wait_while_holding():
-    """Poll sensor until path is clear (or KeyboardInterrupt)."""
-    while True:
-        prox = read_proximity()
-        if update_obstacle_fsm(prox):
-            return prox
-        print("HOLD pose ch0=%d ch1=%d  proximity=%d" % (
-            front_angle, rear_angle, prox))
-        time.sleep(0.05)
+def crawl_allowed():
+    return not delivery_complete
 
 
 # =============================================================================
-# Sequential servo moves with mid-move sensor checks
+# Sequential servo moves with mid-move delivery checks
 # =============================================================================
 
 def move_front_to(hat, target, state_name, step_size=None, step_delay=None,
                   check_sensor=True):
     """
-    Move CH0 only toward target. Returns True if target reached,
-    False if aborted for obstacle (pose held at current angle).
+    Move CH0 only. Returns True if target reached.
+    Returns False if delivery confirmed (pose held; no further commands).
     """
     global front_angle
     if step_size is None:
@@ -212,8 +203,7 @@ def move_front_to(hat, target, state_name, step_size=None, step_delay=None,
     print("  -> MOVING CH0 to %d deg (CH1 holds at %d)" % (target, rear_angle))
 
     if check_sensor:
-        prox = read_proximity()
-        if not update_obstacle_fsm(prox):
+        if check_delivery(read_proximity()):
             return False
 
     if front_angle == target:
@@ -223,9 +213,8 @@ def move_front_to(hat, target, state_name, step_size=None, step_delay=None,
     steps = 0
     while front_angle != target:
         if check_sensor and (steps % SENSOR_CHECK_EVERY_STEPS == 0):
-            prox = read_proximity()
-            if not update_obstacle_fsm(prox):
-                print("  ABORT CH0 move at %d deg (hold pose)" % front_angle)
+            if check_delivery(read_proximity()):
+                print("  STOP CH0 at %d deg (delivery; hold pose)" % front_angle)
                 return False
         set_front(hat, _next_angle(front_angle, target, step_size), state_name)
         time.sleep(step_delay)
@@ -236,8 +225,8 @@ def move_front_to(hat, target, state_name, step_size=None, step_delay=None,
 def move_rear_to(hat, target, state_name, step_size=None, step_delay=None,
                  check_sensor=True):
     """
-    Move CH1 only toward target. Returns True if target reached,
-    False if aborted for obstacle (pose held at current angle).
+    Move CH1 only. Returns True if target reached.
+    Returns False if delivery confirmed (pose held; no further commands).
     """
     global rear_angle
     if step_size is None:
@@ -248,8 +237,7 @@ def move_rear_to(hat, target, state_name, step_size=None, step_delay=None,
     print("  -> MOVING CH1 to %d deg (CH0 holds at %d)" % (target, front_angle))
 
     if check_sensor:
-        prox = read_proximity()
-        if not update_obstacle_fsm(prox):
+        if check_delivery(read_proximity()):
             return False
 
     if rear_angle == target:
@@ -259,9 +247,8 @@ def move_rear_to(hat, target, state_name, step_size=None, step_delay=None,
     steps = 0
     while rear_angle != target:
         if check_sensor and (steps % SENSOR_CHECK_EVERY_STEPS == 0):
-            prox = read_proximity()
-            if not update_obstacle_fsm(prox):
-                print("  ABORT CH1 move at %d deg (hold pose)" % rear_angle)
+            if check_delivery(read_proximity()):
+                print("  STOP CH1 at %d deg (delivery; hold pose)" % rear_angle)
                 return False
         set_rear(hat, _next_angle(rear_angle, target, step_size), state_name)
         time.sleep(step_delay)
@@ -270,7 +257,7 @@ def move_rear_to(hat, target, state_name, step_size=None, step_delay=None,
 
 
 def return_both_to_neutral(hat, hold=True):
-    """Sequential conservative return to 90/90. No sensor gating."""
+    """Sequential conservative return to 90/90 (Ctrl+C / unfinished --once)."""
     print("--- return to neutral (sequential, conservative) ---")
     print("STATE N1: MOVING CH0 to neutral; CH1 holds")
     move_front_to(
@@ -308,15 +295,14 @@ def go_to_start_pose(hat):
 
 
 # =============================================================================
-# Gait driver with obstacle-aware phase resume
+# Gait driver
 # =============================================================================
 
 def run_current_phase(hat):
     """
-    Execute gait_phase toward its fixed target.
-    If interrupted, leave gait_phase unchanged so resume continues
-    toward the same target (no reverse on the same contact side).
-    Returns True if phase completed, False if held for obstacle.
+    Execute current gait phase. Returns:
+      True  - phase completed
+      False - delivery confirmed (crawl finished; pose held)
     """
     global gait_phase
     channel, name, target, desc = PHASES[gait_phase]
@@ -338,47 +324,53 @@ def run_current_phase(hat):
 
 def run_one_ab_cycle(hat):
     """
-    Run until phases 0..3 have each completed once from the current phase.
-    For --once starting at phase 0: one A stroke + one B stroke.
+    One A + one B stroke (4 phases), or stop early on delivery.
+    Returns True if delivery completed during the cycle.
     """
     completed = 0
     needed = len(PHASES)
     while completed < needed:
-        prox = read_proximity()
-        if not update_obstacle_fsm(prox):
-            wait_while_holding()
-            continue
+        if delivery_complete:
+            return True
+        if check_delivery(read_proximity()):
+            return True
         if run_current_phase(hat):
             completed += 1
         else:
-            wait_while_holding()
-            # Resume same phase (completed not incremented)
+            return True  # delivery during move
+    return delivery_complete
 
 
 def run_sensor_only():
-    """Sensor detection test without moving servos."""
+    """Calibrate delivery threshold without moving servos."""
     print("SENSOR-ONLY mode (no servo motion)")
-    print("STOP when proximity > %d" % STOP_THRESHOLD)
-    print("RESUME when proximity < %d" % RESUME_THRESHOLD)
+    print("Delivery when proximity >= %d for %d consecutive readings" % (
+        DELIVERY_THRESHOLD, CONFIRM_READINGS))
     print("Higher value = closer. Ctrl+C to exit.\n")
     init_sensor()
     try:
         while True:
             prox = read_proximity()
-            allowed = update_obstacle_fsm(prox)
-            if allowed:
-                status = "CLEAR (would CRAWL)"
+            done = check_delivery(prox)
+            if done:
+                status = "DELIVERY COMPLETE (permanent)"
+            elif prox >= DELIVERY_THRESHOLD:
+                status = "NEAR candidate %d/%d" % (
+                    delivery_hit_count, CONFIRM_READINGS)
             else:
-                status = "NEAR  (would HOLD)"
+                status = "FAR (would CRAWL)"
             print("Proximity: %5d  |  mode=%s  |  %s" % (
                 prox, motion_mode, status))
+            if done:
+                print("Sensor-only delivery confirmed. Exiting (no servos moved).")
+                return
             time.sleep(0.2)
     except KeyboardInterrupt:
         print("\nEnding sensor-only test.")
 
 
 def parse_args(args):
-    global STOP_THRESHOLD, RESUME_THRESHOLD
+    global DELIVERY_THRESHOLD
     if "--help" in args or "-h" in args:
         print(__doc__)
         sys.exit(0)
@@ -387,23 +379,15 @@ def parse_args(args):
     loop = "--loop" in args
     once = "--once" in args or (not loop and not sensor_only)
 
-    if "--stop" in args:
-        i = args.index("--stop")
-        STOP_THRESHOLD = int(args[i + 1])
-    if "--resume" in args:
-        i = args.index("--resume")
-        RESUME_THRESHOLD = int(args[i + 1])
-
-    if RESUME_THRESHOLD >= STOP_THRESHOLD:
-        print("Error: resume threshold (%d) must be < stop threshold (%d)" % (
-            RESUME_THRESHOLD, STOP_THRESHOLD), file=sys.stderr)
-        sys.exit(1)
+    if "--threshold" in args:
+        i = args.index("--threshold")
+        DELIVERY_THRESHOLD = int(args[i + 1])
 
     return sensor_only, once, loop
 
 
 def main():
-    global gait_phase, motion_mode
+    global gait_phase, motion_mode, delivery_complete, delivery_hit_count
 
     sensor_only, once, loop = parse_args(sys.argv[1:])
 
@@ -411,18 +395,18 @@ def main():
         run_sensor_only()
         return
 
-    print("Initializing obstacle-aware crawl...")
+    print("Initializing delivery crawl...")
     print("SERVO_SWING=%d" % SERVO_SWING)
     print("Speed: fast (step=%d deg, delay=%.3f s)" % (GAIT_STEP, GAIT_STEP_DELAY))
     print("FRONT CH0: %d-%d neutral %d  (A=%d B=%d)" % (
         FRONT_MIN, FRONT_MAX, FRONT_NEUTRAL, FRONT_A, FRONT_B))
     print("REAR  CH1: %d-%d neutral %d  (A=%d B=%d)" % (
         REAR_MIN, REAR_MAX, REAR_NEUTRAL, REAR_A, REAR_B))
-    print("Stop threshold: %d  Resume threshold: %d  (hysteresis)" % (
-        STOP_THRESHOLD, RESUME_THRESHOLD))
+    print("Delivery threshold: %d (raw)  confirm: %d consecutive readings" % (
+        DELIVERY_THRESHOLD, CONFIRM_READINGS))
     print("Gait: sequential alternating crawl; one servo at a time")
     print("Mode: %s" % ("continuous --loop" if loop else "single-cycle --once"))
-    print("Ctrl+C -> sequential return to neutral.\n")
+    print("On delivery: hold pose, no auto-neutral. Ctrl+C -> neutral.\n")
 
     try:
         init_sensor()
@@ -436,27 +420,34 @@ def main():
     go_to_start_pose(hat)
     gait_phase = 0
     motion_mode = "crawl"
+    delivery_complete = False
+    delivery_hit_count = 0
 
     try:
         if once and not loop:
             print("\n########## SINGLE CYCLE (A + B strokes) ##########")
-            run_one_ab_cycle(hat)
-            print("\nSingle-cycle done. Returning to neutral.")
+            delivered = run_one_ab_cycle(hat)
+            if delivered:
+                print("Exiting after delivery (pose held; no auto-neutral).")
+                return
+            print("\nSingle-cycle done without delivery. Returning to neutral.")
             return_both_to_neutral(hat, hold=True)
             print("Done.")
             return
 
         cycle = 0
-        while True:
+        while not delivery_complete:
             cycle += 1
             print("\n########## CRAWL LOOP %d (phase=%d) ##########" % (
                 cycle, gait_phase))
-            prox = read_proximity()
-            if not update_obstacle_fsm(prox):
-                wait_while_holding()
-                continue
+            if check_delivery(read_proximity()):
+                break
             if not run_current_phase(hat):
-                wait_while_holding()
+                break
+
+        if delivery_complete:
+            print("Crawl terminated after DELIVERY COMPLETE (pose held).")
+        print("Done.")
 
     except KeyboardInterrupt:
         print("\nCtrl+C - stopping...")
