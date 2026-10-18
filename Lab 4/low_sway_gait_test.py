@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 """
-Low-sway gait test: same proven sequential Fast crawl as coordinated_gait_test.py,
-with ONLY CH1 (rear) swing amplitude as the experimental variable.
+Low-sway gait test: proven sequential crawl from coordinated_gait_test.py,
+with independent CH1 amplitude and CH1 crawl-speed experiments.
 
-Fixed (unchanged from proven Fast gait):
+Fixed:
   - SERVO_SWING=180
-  - Fast speed: 3 deg steps, 0.01 s delay (both servos)
-  - CH0 front range: 60-120 (A=120, B=60), neutral 90
-  - Strictly sequential alternating gait (never move both at once)
-  - CH0 holds its current angle while CH1 switches sides
-  - Conservative neutral return: 1 deg / 0.05 s, CH0 then CH1
+  - CH0 Fast crawl: 3 deg steps, 0.01 s delay
+  - CH0 range: 60-120 (A=120, B=60), neutral 90
+  - Strictly sequential gait (never move both at once)
+  - CH0 holds while CH1 switches sides (no CH0 reposition)
+  - Neutral return: always 1 deg / 0.05 s, CH0 then CH1
 
-CH1 presets (min, max):
+CH1 amplitude presets (--preset):
   original  70-110
-  gentle    75-105   (default)
-  minimal   80-100
+  gentle    75-105
+  minimal   80-100   (default)
+
+CH1 crawl speed presets (--rear-speed); applied only while crawling:
+  fast    3 deg / 0.01 s
+  smooth  1 deg / 0.02 s   (default)
+  slow    1 deg / 0.05 s
 
 Usage (from Lab 4, with venv activated):
   python low_sway_gait_test.py
-  python low_sway_gait_test.py --preset gentle
-  python low_sway_gait_test.py --preset original --once
-  python low_sway_gait_test.py --preset minimal --loop
+  python low_sway_gait_test.py --preset minimal --rear-speed smooth --once
+  python low_sway_gait_test.py --preset original --rear-speed fast --loop
+  python low_sway_gait_test.py --preset gentle --rear-speed slow --once
 """
 
 import sys
@@ -35,7 +40,7 @@ REAR_CHANNEL = 1
 SERVO_SWING = 180
 
 # =============================================================================
-# Front (CH0) -- fixed proven range
+# Front (CH0) -- fixed proven Fast crawl
 # =============================================================================
 FRONT_NEUTRAL = 90
 FRONT_MIN = 60
@@ -43,8 +48,11 @@ FRONT_MAX = 120
 FRONT_A = FRONT_MAX  # 120
 FRONT_B = FRONT_MIN  # 60
 
+FRONT_STEP = 3
+FRONT_STEP_DELAY = 0.01
+
 # =============================================================================
-# Rear (CH1) -- experimental amplitude presets only
+# Rear (CH1) -- amplitude presets
 # =============================================================================
 REAR_NEUTRAL = 90
 
@@ -53,9 +61,8 @@ CH1_PRESETS = {
     "gentle": (75, 105),
     "minimal": (80, 100),
 }
-DEFAULT_PRESET = "gentle"
+DEFAULT_PRESET = "minimal"
 
-# Active CH1 limits / targets (set from --preset in main)
 REAR_MIN = CH1_PRESETS[DEFAULT_PRESET][0]
 REAR_MAX = CH1_PRESETS[DEFAULT_PRESET][1]
 REAR_A = REAR_MAX
@@ -63,11 +70,20 @@ REAR_B = REAR_MIN
 PRESET_NAME = DEFAULT_PRESET
 
 # =============================================================================
-# Fast gait timing (fixed) + conservative neutral return
+# Rear (CH1) -- crawl speed presets (not used for neutral return)
 # =============================================================================
-GAIT_STEP = 3
-GAIT_STEP_DELAY = 0.01
+CH1_SPEED_PRESETS = {
+    "fast": (3, 0.01),
+    "smooth": (1, 0.02),
+    "slow": (1, 0.05),
+}
+DEFAULT_REAR_SPEED = "smooth"
 
+REAR_STEP = CH1_SPEED_PRESETS[DEFAULT_REAR_SPEED][0]
+REAR_STEP_DELAY = CH1_SPEED_PRESETS[DEFAULT_REAR_SPEED][1]
+REAR_SPEED_NAME = DEFAULT_REAR_SPEED
+
+# Conservative neutral return (both channels)
 NEUTRAL_STEP = 1
 NEUTRAL_STEP_DELAY = 0.05
 STATE_PAUSE = 0.3
@@ -105,6 +121,7 @@ def set_rear(hat, angle, label):
 
 
 def _next_angle(current, target, step_size):
+    """Advance toward target without overshooting; always can land exactly."""
     if current == target:
         return target
     if target > current:
@@ -113,11 +130,12 @@ def _next_angle(current, target, step_size):
 
 
 def move_front_to(hat, target, state_name, step_size=None, step_delay=None):
+    """CH0 crawl defaults to fixed Fast settings. Always hits exact target."""
     global front_angle
     if step_size is None:
-        step_size = GAIT_STEP
+        step_size = FRONT_STEP
     if step_delay is None:
-        step_delay = GAIT_STEP_DELAY
+        step_delay = FRONT_STEP_DELAY
     target = clamp_front(target)
     print("  -> MOVING CH0 to %d deg (CH1 holds at %d) step=%d delay=%.3fs" % (
         target, rear_angle, step_size, step_delay))
@@ -130,11 +148,12 @@ def move_front_to(hat, target, state_name, step_size=None, step_delay=None):
 
 
 def move_rear_to(hat, target, state_name, step_size=None, step_delay=None):
+    """CH1 crawl defaults to selected --rear-speed. Always hits exact target."""
     global rear_angle
     if step_size is None:
-        step_size = GAIT_STEP
+        step_size = REAR_STEP
     if step_delay is None:
-        step_delay = GAIT_STEP_DELAY
+        step_delay = REAR_STEP_DELAY
     target = clamp_rear(target)
     print("  -> MOVING CH1 to %d deg (CH0 holds at %d) step=%d delay=%.3fs" % (
         target, front_angle, step_size, step_delay))
@@ -170,7 +189,7 @@ def return_both_to_neutral(hat, hold=True):
 
 def run_ab_half_cycle(hat, from_start=False):
     """
-    Proven sequential gait (same as coordinated_gait_test.py):
+    Proven sequential gait:
       CH1 -> A (CH0 holds), CH0 -> A (CH1 holds),
       CH1 -> B directly (CH0 holds at A), CH0 -> B (CH1 holds).
     No CH0 reposition before CH1 switches sides.
@@ -231,6 +250,17 @@ def apply_preset(name):
     PRESET_NAME = name
 
 
+def apply_rear_speed(name):
+    global REAR_STEP, REAR_STEP_DELAY, REAR_SPEED_NAME
+    name = name.lower()
+    if name not in CH1_SPEED_PRESETS:
+        print("Error: unknown --rear-speed '%s'. Choose: %s" % (
+            name, ", ".join(sorted(CH1_SPEED_PRESETS.keys()))), file=sys.stderr)
+        sys.exit(1)
+    REAR_STEP, REAR_STEP_DELAY = CH1_SPEED_PRESETS[name]
+    REAR_SPEED_NAME = name
+
+
 def parse_args(args):
     if "--help" in args or "-h" in args:
         print(__doc__)
@@ -246,8 +276,17 @@ def parse_args(args):
             print("Error: --preset requires original|gentle|minimal", file=sys.stderr)
             sys.exit(1)
         preset = args[i + 1]
-
     apply_preset(preset)
+
+    rear_speed = DEFAULT_REAR_SPEED
+    if "--rear-speed" in args:
+        i = args.index("--rear-speed")
+        if i + 1 >= len(args):
+            print("Error: --rear-speed requires fast|smooth|slow", file=sys.stderr)
+            sys.exit(1)
+        rear_speed = args[i + 1]
+    apply_rear_speed(rear_speed)
+
     return once, loop
 
 
@@ -256,12 +295,16 @@ def main():
 
     print("Initializing low-sway gait test...")
     print("SERVO_SWING=%d" % SERVO_SWING)
-    print("Speed: fast (step=%d deg, delay=%.3f s) -- fixed" % (
-        GAIT_STEP, GAIT_STEP_DELAY))
+    print("CH0 crawl: fast fixed (step=%d deg, delay=%.3f s)" % (
+        FRONT_STEP, FRONT_STEP_DELAY))
     print("FRONT CH0: %d-%d neutral %d  (A=%d B=%d) -- fixed" % (
         FRONT_MIN, FRONT_MAX, FRONT_NEUTRAL, FRONT_A, FRONT_B))
-    print("REAR  CH1 preset=%s: %d-%d neutral %d  (A=%d B=%d)" % (
+    print("REAR  CH1 amplitude preset=%s: %d-%d neutral %d  (A=%d B=%d)" % (
         PRESET_NAME, REAR_MIN, REAR_MAX, REAR_NEUTRAL, REAR_A, REAR_B))
+    print("REAR  CH1 crawl speed=%s (step=%d deg, delay=%.3f s)" % (
+        REAR_SPEED_NAME, REAR_STEP, REAR_STEP_DELAY))
+    print("Neutral return: always conservative (step=%d deg, delay=%.3f s)" % (
+        NEUTRAL_STEP, NEUTRAL_STEP_DELAY))
     print("Gait: STRICTLY SEQUENTIAL (CH0 holds while CH1 switches sides)")
     print("Mode: %s" % ("continuous --loop" if loop else "single cycle --once"))
     print("Ctrl+C / exit -> sequential return to neutral.\n")
@@ -275,8 +318,8 @@ def main():
         from_start = True
         while True:
             cycle += 1
-            print("\n########## GAIT CYCLE %d preset=%s ##########" % (
-                cycle, PRESET_NAME))
+            print("\n########## GAIT CYCLE %d preset=%s rear-speed=%s ##########" % (
+                cycle, PRESET_NAME, REAR_SPEED_NAME))
             run_ab_half_cycle(hat, from_start=from_start)
             from_start = False
 
