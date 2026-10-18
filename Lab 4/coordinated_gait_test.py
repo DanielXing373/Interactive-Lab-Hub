@@ -29,10 +29,10 @@ Physical directions are unverified -- flip the mapping constants below
 if left/right or front stroke feel reversed.
 
 Usage (from Lab 4, with venv activated):
-  python coordinated_gait_test.py --calibrate  # hold both at 90 deg (horn check)
-  python coordinated_gait_test.py              # one A+B stroke cycle, then neutral
-  python coordinated_gait_test.py --once       # same as default
-  python coordinated_gait_test.py --loop       # continuous alternating crawl
+  python coordinated_gait_test.py --calibrate
+  python coordinated_gait_test.py --speed slow|normal|fast|turbo
+  python coordinated_gait_test.py --loop --speed normal
+  python coordinated_gait_test.py --once
 """
 
 import sys
@@ -72,17 +72,33 @@ FRONT_A = FRONT_MAX  # 120 -- stroke used while rear is at REAR_A
 FRONT_B = FRONT_MIN  # 60  -- opposite stroke while rear is at REAR_B
 
 # =============================================================================
-# Timing (slow for calibration)
+# Speed presets: (step_degrees, step_delay_seconds)
+# Default "slow" preserves previous crawl timing.
 # =============================================================================
-STEP = 1
-STEP_DELAY = 0.05
+SPEED_PRESETS = {
+    "slow": (1, 0.05),
+    "normal": (2, 0.02),
+    "fast": (3, 0.01),
+    "turbo": (5, 0.005),
+}
+DEFAULT_SPEED = "slow"
+
+# Return-to-neutral / start-pose always use conservative motion.
+NEUTRAL_STEP = 1
+NEUTRAL_STEP_DELAY = 0.05
+
 STATE_PAUSE = 0.3       # brief pause between states so motion is easy to watch
 NEUTRAL_HOLD = 1.0      # hold resting posture before exit (PWM stays enabled)
 CALIBRATE_HOLD = 30.0   # seconds to hold 90/90 for horn alignment check
 
+# Active gait speed (set in main from --speed)
+GAIT_STEP = SPEED_PRESETS[DEFAULT_SPEED][0]
+GAIT_STEP_DELAY = SPEED_PRESETS[DEFAULT_SPEED][1]
+SPEED_NAME = DEFAULT_SPEED
+
 
 # -----------------------------------------------------------------------------
-# Servo helpers -- always step 1 deg at a time; ONE channel per movement step
+# Servo helpers -- ONE channel per movement step; always land on exact target
 # -----------------------------------------------------------------------------
 
 front_angle = FRONT_NEUTRAL
@@ -119,48 +135,76 @@ def set_rear(hat, angle, label):
     _log_pose(label, "CH1")
 
 
-def move_front_to(hat, target, state_name):
-    """Smoothly walk CH0 to target in 1 deg steps. CH1 never commanded."""
+def _next_angle(current, target, step_size):
+    """Advance toward target by step_size without overshooting."""
+    if current == target:
+        return target
+    if target > current:
+        return min(current + step_size, target)
+    return max(current - step_size, target)
+
+
+def move_front_to(hat, target, state_name, step_size=None, step_delay=None):
+    """
+    Smoothly walk CH0 to target. CH1 never commanded.
+    Always finishes at the exact target angle.
+    """
     global front_angle
+    if step_size is None:
+        step_size = GAIT_STEP
+    if step_delay is None:
+        step_delay = GAIT_STEP_DELAY
     target = clamp_front(target)
-    print("  -> MOVING CH0 to %d deg (CH1 holds at %d)" % (target, rear_angle))
+    print("  -> MOVING CH0 to %d deg (CH1 holds at %d) step=%d delay=%.3fs" % (
+        target, rear_angle, step_size, step_delay))
     if front_angle == target:
         set_front(hat, target, state_name)
         return
-    step = STEP if target > front_angle else -STEP
-    for angle in range(front_angle, target, step):
-        set_front(hat, angle + step, state_name)
-        time.sleep(STEP_DELAY)
+    while front_angle != target:
+        set_front(hat, _next_angle(front_angle, target, step_size), state_name)
+        time.sleep(step_delay)
 
 
-def move_rear_to(hat, target, state_name):
-    """Smoothly walk CH1 to target in 1 deg steps. CH0 never commanded."""
+def move_rear_to(hat, target, state_name, step_size=None, step_delay=None):
+    """
+    Smoothly walk CH1 to target. CH0 never commanded.
+    Always finishes at the exact target angle.
+    """
     global rear_angle
+    if step_size is None:
+        step_size = GAIT_STEP
+    if step_delay is None:
+        step_delay = GAIT_STEP_DELAY
     target = clamp_rear(target)
-    print("  -> MOVING CH1 to %d deg (CH0 holds at %d)" % (target, front_angle))
+    print("  -> MOVING CH1 to %d deg (CH0 holds at %d) step=%d delay=%.3fs" % (
+        target, front_angle, step_size, step_delay))
     if rear_angle == target:
         set_rear(hat, target, state_name)
         return
-    step = STEP if target > rear_angle else -STEP
-    for angle in range(rear_angle, target, step):
-        set_rear(hat, angle + step, state_name)
-        time.sleep(STEP_DELAY)
+    while rear_angle != target:
+        set_rear(hat, _next_angle(rear_angle, target, step_size), state_name)
+        time.sleep(step_delay)
 
 
 def return_both_to_neutral(hat, hold=True):
     """
-    Strictly sequential return to 90/90:
+    Strictly sequential return to 90/90 using conservative slow motion
+    regardless of --speed:
       1) move CH0 to neutral (CH1 holds)
       2) move CH1 to neutral (CH0 holds)
     Then re-assert each channel separately. Does NOT disable PWM.
     """
-    print("--- return to neutral (sequential) ---")
+    print("--- return to neutral (sequential, conservative slow) ---")
     print("STATE N1: MOVING CH0 to neutral; CH1 holds")
-    move_front_to(hat, FRONT_NEUTRAL, "N1 CH0 -> neutral")
+    move_front_to(
+        hat, FRONT_NEUTRAL, "N1 CH0 -> neutral",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY)
     time.sleep(STATE_PAUSE)
 
     print("STATE N2: MOVING CH1 to neutral; CH0 holds")
-    move_rear_to(hat, REAR_NEUTRAL, "N2 CH1 -> neutral")
+    move_rear_to(
+        hat, REAR_NEUTRAL, "N2 CH1 -> neutral",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY)
     time.sleep(STATE_PAUSE)
 
     print("STATE N3: re-assert neutral (CH0 then CH1, still sequential)")
@@ -224,13 +268,17 @@ def run_ab_half_cycle(hat, from_start=False):
 
 
 def go_to_start_pose(hat):
-    """Sequential park at neutral before the first gait cycle."""
-    print("=== START POSE: sequential move to 90/90 ===")
+    """Sequential park at neutral before the first gait cycle (conservative)."""
+    print("=== START POSE: sequential move to 90/90 (conservative) ===")
     print("STATE S0a: MOVING CH0 to neutral; CH1 not yet commanded this step")
-    move_front_to(hat, FRONT_NEUTRAL, "S0a CH0 -> neutral")
+    move_front_to(
+        hat, FRONT_NEUTRAL, "S0a CH0 -> neutral",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY)
     time.sleep(STATE_PAUSE)
     print("STATE S0b: MOVING CH1 to neutral; CH0 holds")
-    move_rear_to(hat, REAR_NEUTRAL, "S0b CH1 -> neutral")
+    move_rear_to(
+        hat, REAR_NEUTRAL, "S0b CH1 -> neutral",
+        step_size=NEUTRAL_STEP, step_delay=NEUTRAL_STEP_DELAY)
     time.sleep(0.5)
 
 
@@ -268,7 +316,27 @@ def run_calibrate(hat):
         print("Done.")
 
 
+def parse_speed(args):
+    """Parse --speed NAME. Default slow. Returns (name, step, delay)."""
+    name = DEFAULT_SPEED
+    if "--speed" in args:
+        idx = args.index("--speed")
+        if idx + 1 >= len(args):
+            print("Error: --speed requires one of: %s" % (
+                ", ".join(sorted(SPEED_PRESETS.keys()))), file=sys.stderr)
+            sys.exit(1)
+        name = args[idx + 1].lower()
+        if name not in SPEED_PRESETS:
+            print("Error: unknown speed '%s'. Choose: %s" % (
+                name, ", ".join(sorted(SPEED_PRESETS.keys()))), file=sys.stderr)
+            sys.exit(1)
+    step, delay = SPEED_PRESETS[name]
+    return name, step, delay
+
+
 def main():
+    global GAIT_STEP, GAIT_STEP_DELAY, SPEED_NAME
+
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
         print(__doc__)
@@ -279,6 +347,8 @@ def main():
     # Default and --once: single cycle
     once = (not loop) or ("--once" in args)
 
+    SPEED_NAME, GAIT_STEP, GAIT_STEP_DELAY = parse_speed(args)
+
     print("Initializing Servo pHAT...")
     print("SERVO_SWING=%d (90 deg = midpoint of 1.0-2.0 ms pulse)" % SERVO_SWING)
     print("FRONT CH%d: %d-%d, neutral %d" % (
@@ -288,6 +358,10 @@ def main():
     print("Mapping: REAR_A=%d REAR_B=%d  FRONT_A=%d FRONT_B=%d" % (
         REAR_A, REAR_B, FRONT_A, FRONT_B))
     print("Gait: STRICTLY SEQUENTIAL alternating crawl (no CH0 reposition)")
+    print("Speed: %s (step=%d deg, delay=%.3f s)" % (
+        SPEED_NAME, GAIT_STEP, GAIT_STEP_DELAY))
+    print("Neutral return: always conservative (step=%d deg, delay=%.3f s)" % (
+        NEUTRAL_STEP, NEUTRAL_STEP_DELAY))
     if calibrate:
         print("Mode: calibrate-only (hold 90/90, no gait)")
     else:
@@ -331,6 +405,6 @@ def main():
         print("Resting posture held. Done.")
 
 
-
 if __name__ == "__main__":
     main()
+
