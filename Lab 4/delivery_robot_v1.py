@@ -4,7 +4,7 @@ Delivery Robot 1.0 -- reliability-focused MVP (standalone).
 
 Integrates proven behavior from:
   - coordinated_gait_test.py  (strictly sequential alternating crawl)
-  - low_sway_gait_test.py     (CH1 minimal 80-100 + smooth crawl speed)
+  - low_sway_gait_test.py     (CH1 smooth crawl speed; amplitude tuned to 75-105)
   - sensor_crawl_test.py      (VCNL4040 delivery confirm + rest sequence)
 
 Does NOT import those test scripts. Uses only course libraries:
@@ -46,13 +46,13 @@ FRONT_STEP = 3
 FRONT_STEP_DELAY = 0.01
 
 # =============================================================================
-# CH1 rear -- proven minimal sway + smooth crawl
+# CH1 rear -- smooth crawl; 75-105 compensates cardboard asymmetry
 # =============================================================================
 REAR_NEUTRAL = 90
-REAR_MIN = 80
-REAR_MAX = 100
-REAR_A = REAR_MAX  # 100
-REAR_B = REAR_MIN  # 80
+REAR_MIN = 75
+REAR_MAX = 105
+REAR_A = REAR_MAX  # 105
+REAR_B = REAR_MIN  # 75
 REAR_STEP = 1
 REAR_STEP_DELAY = 0.02
 
@@ -374,7 +374,7 @@ def main():
     print("SERVO_SWING=%d" % SERVO_SWING)
     print("CH0 Fast: %d-%d (A=%d B=%d) step=%d delay=%.3fs" % (
         FRONT_MIN, FRONT_MAX, FRONT_A, FRONT_B, FRONT_STEP, FRONT_STEP_DELAY))
-    print("CH1 Smooth minimal: %d-%d (A=%d B=%d) step=%d delay=%.3fs" % (
+    print("CH1 Smooth: %d-%d (A=%d B=%d) step=%d delay=%.3fs" % (
         REAR_MIN, REAR_MAX, REAR_A, REAR_B, REAR_STEP, REAR_STEP_DELAY))
     print("Delivery: threshold=%d confirm=%d consecutive" % (
         DELIVERY_THRESHOLD, CONFIRM_READINGS))
