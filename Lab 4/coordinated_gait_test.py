@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """
-Strictly sequential coordinated gait test (CH0 front + CH1 rear).
+Strictly sequential alternating crawl gait (CH0 front + CH1 rear).
 
 CH0 and CH1 NEVER change commanded angles in the same movement step.
 One servo moves while the other holds its last PWM command.
+CH0 is NEVER repositioned before CH1 switches sides.
 
-Gait (alternating state machine):
-  1) Move CH1 to tilt A; CH0 holds
-  2) Move CH0 through stroke A; CH1 holds
-  3) Reposition CH0 for the other side; CH1 still holds at A
-  4) Move CH1 to tilt B; CH0 holds
-  5) Move CH0 through stroke B; CH1 holds
-  6) Repeat (--loop) or return to neutral (single-cycle)
+Start: CH0=90, CH1=90
+
+Single-cycle (one A-side stroke + one B-side stroke):
+  1) CH1 90 -> REAR_A;   CH0 holds 90
+  2) CH0 90 -> FRONT_A;  CH1 holds REAR_A
+  3) CH1 REAR_A -> REAR_B directly;  CH0 holds FRONT_A
+  4) CH0 FRONT_A -> FRONT_B directly; CH1 holds REAR_B
+  then sequential return to neutral
+
+Continuous --loop continues alternating from there:
+  5) CH1 REAR_B -> REAR_A;   CH0 holds FRONT_B
+  6) CH0 FRONT_B -> FRONT_A; CH1 holds REAR_A
+  7) CH1 REAR_A -> REAR_B;   CH0 holds FRONT_A
+  8) CH0 FRONT_A -> FRONT_B; CH1 holds REAR_B
+  repeat 5-8 ...
 
 Reuses SparkFun Servo pHAT via pi_servo_hat.
 Does NOT use the distance sensor. Does NOT modify delivery_robot.py.
@@ -21,9 +30,9 @@ if left/right or front stroke feel reversed.
 
 Usage (from Lab 4, with venv activated):
   python coordinated_gait_test.py --calibrate  # hold both at 90 deg (horn check)
-  python coordinated_gait_test.py              # one safe cycle, then hold neutral
+  python coordinated_gait_test.py              # one A+B stroke cycle, then neutral
   python coordinated_gait_test.py --once       # same as default
-  python coordinated_gait_test.py --loop       # repeat until Ctrl+C
+  python coordinated_gait_test.py --loop       # continuous alternating crawl
 """
 
 import sys
@@ -166,33 +175,51 @@ def return_both_to_neutral(hat, hold=True):
 
 # -----------------------------------------------------------------------------
 # Gait state machine (strictly sequential: never move CH0 and CH1 together)
+# No CH0 repositioning between CH1 side switches.
 # -----------------------------------------------------------------------------
 
-def run_one_cycle(hat):
+def run_ab_half_cycle(hat, from_start=False):
     """
-    One gait cycle. Exactly one servo moves per state.
-    Leaves pose at CH0=FRONT_B, CH1=REAR_B after state 5.
+    One A-side stroke + one B-side stroke (4 sequential moves).
+
+    If from_start=True (first half from neutral):
+      CH1: 90 -> REAR_A, then CH0: 90 -> FRONT_A,
+      CH1: REAR_A -> REAR_B, then CH0: FRONT_A -> FRONT_B
+
+    If from_start=False (continuing crawl; CH0 already at FRONT_B, CH1 at REAR_B):
+      CH1: REAR_B -> REAR_A, then CH0: FRONT_B -> FRONT_A,
+      CH1: REAR_A -> REAR_B, then CH0: FRONT_A -> FRONT_B
+
+    Never moves CH0 before CH1 switches sides. Leaves CH0=FRONT_B, CH1=REAR_B.
     """
-    print("\n=== STATE 1: MOVING CH1 to tilt A; CH0 holds ===")
-    move_rear_to(hat, REAR_A, "S1 CH1 -> A")
+    if from_start:
+        print("\n=== STATE 1: MOVING CH1 90 -> REAR_A=%d; CH0 holds 90 ===" % REAR_A)
+        move_rear_to(hat, REAR_A, "S1 CH1 -> A")
+        time.sleep(STATE_PAUSE)
+
+        print("\n=== STATE 2: MOVING CH0 90 -> FRONT_A=%d; CH1 holds %d ===" % (
+            FRONT_A, REAR_A))
+        move_front_to(hat, FRONT_A, "S2 CH0 stroke A")
+        time.sleep(STATE_PAUSE)
+    else:
+        print("\n=== STATE 1: MOVING CH1 REAR_B -> REAR_A=%d; CH0 holds FRONT_B ===" % (
+            REAR_A))
+        move_rear_to(hat, REAR_A, "S1 CH1 -> A")
+        time.sleep(STATE_PAUSE)
+
+        print("\n=== STATE 2: MOVING CH0 FRONT_B -> FRONT_A=%d; CH1 holds %d ===" % (
+            FRONT_A, REAR_A))
+        move_front_to(hat, FRONT_A, "S2 CH0 stroke A")
+        time.sleep(STATE_PAUSE)
+
+    print("\n=== STATE 3: MOVING CH1 directly to REAR_B=%d; CH0 holds FRONT_A ===" % (
+        REAR_B))
+    move_rear_to(hat, REAR_B, "S3 CH1 -> B")
     time.sleep(STATE_PAUSE)
 
-    print("\n=== STATE 2: MOVING CH0 stroke A; CH1 holds at A ===")
-    move_front_to(hat, FRONT_A, "S2 CH0 stroke A")
-    time.sleep(STATE_PAUSE)
-
-    print("\n=== STATE 3: MOVING CH0 reposition to B target; CH1 still holds at A ===")
-    print("(CH0 finishes before CH1 is allowed to leave A)")
-    move_front_to(hat, FRONT_B, "S3 CH0 reposition")
-    time.sleep(STATE_PAUSE)
-
-    print("\n=== STATE 4: MOVING CH1 to tilt B; CH0 holds ===")
-    move_rear_to(hat, REAR_B, "S4 CH1 -> B")
-    time.sleep(STATE_PAUSE)
-
-    print("\n=== STATE 5: MOVING CH0 stroke B; CH1 holds at B ===")
-    # Already at FRONT_B after state 3; re-assert / finish stroke B while CH1 holds.
-    move_front_to(hat, FRONT_B, "S5 CH0 stroke B")
+    print("\n=== STATE 4: MOVING CH0 directly to FRONT_B=%d; CH1 holds REAR_B ===" % (
+        FRONT_B))
+    move_front_to(hat, FRONT_B, "S4 CH0 stroke B")
     time.sleep(STATE_PAUSE)
 
 
@@ -260,7 +287,7 @@ def main():
         REAR_CHANNEL, REAR_MIN, REAR_MAX, REAR_NEUTRAL))
     print("Mapping: REAR_A=%d REAR_B=%d  FRONT_A=%d FRONT_B=%d" % (
         REAR_A, REAR_B, FRONT_A, FRONT_B))
-    print("Gait: STRICTLY SEQUENTIAL (CH0 and CH1 never move together)")
+    print("Gait: STRICTLY SEQUENTIAL alternating crawl (no CH0 reposition)")
     if calibrate:
         print("Mode: calibrate-only (hold 90/90, no gait)")
     else:
@@ -278,21 +305,22 @@ def main():
 
     try:
         cycle = 0
+        from_start = True
         while True:
             cycle += 1
-            print("\n########## GAIT CYCLE %d ##########" % cycle)
-            run_one_cycle(hat)
+            print("\n########## GAIT CYCLE %d (A stroke + B stroke) ##########" % cycle)
+            run_ab_half_cycle(hat, from_start=from_start)
+            from_start = False  # later cycles continue from FRONT_B / REAR_B
 
             if once and not loop:
-                print("\nSingle-cycle mode: sequential return to neutral.")
+                print("\nSingle-cycle mode: one A + one B stroke done.")
+                print("Sequential return to neutral.")
                 return_both_to_neutral(hat, hold=True)
                 print("Resting posture ready for next test. Done.")
                 return
 
-            # Continuous: CH0 back to neutral first (CH1 holds at B), then
-            # next cycle state 1 moves CH1 B -> A while CH0 holds.
-            print("\n=== BRIDGE: MOVING CH0 to neutral; CH1 holds ===")
-            move_front_to(hat, FRONT_NEUTRAL, "bridge CH0 -> neutral")
+            # Continuous: no CH0 reposition / no bridge to neutral.
+            # Next cycle starts with CH1 REAR_B -> REAR_A while CH0 holds FRONT_B.
 
     except KeyboardInterrupt:
         print("\nCtrl+C - stopping gait...")
@@ -301,6 +329,7 @@ def main():
         except Exception as exc:
             print("Warning: could not return to neutral: %s" % exc, file=sys.stderr)
         print("Resting posture held. Done.")
+
 
 
 if __name__ == "__main__":
