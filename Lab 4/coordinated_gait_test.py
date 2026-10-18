@@ -16,9 +16,10 @@ Physical directions are unverified -- flip the mapping constants below
 if left/right or front stroke feel reversed.
 
 Usage (from Lab 4, with venv activated):
-  python coordinated_gait_test.py           # one safe cycle, then hold neutral
-  python coordinated_gait_test.py --once    # same as default
-  python coordinated_gait_test.py --loop    # repeat until Ctrl+C
+  python coordinated_gait_test.py --calibrate  # hold both at 90 deg (horn check)
+  python coordinated_gait_test.py              # one safe cycle, then hold neutral
+  python coordinated_gait_test.py --once       # same as default
+  python coordinated_gait_test.py --loop       # repeat until Ctrl+C
 """
 
 import sys
@@ -30,6 +31,10 @@ import pi_servo_hat
 # =============================================================================
 FRONT_CHANNEL = 0  # CH0 - front legs
 REAR_CHANNEL = 1   # CH1 - rear legs
+
+# Explicit swing so angle 90 maps to midpoint of the default 1.0-2.0 ms pulse.
+# (Library default swing=90 maps 90 deg to the MAX pulse, not center.)
+SERVO_SWING = 180
 
 # =============================================================================
 # Angle limits (keep within these clamps)
@@ -60,6 +65,7 @@ STEP = 1
 STEP_DELAY = 0.05
 STATE_PAUSE = 0.3       # brief pause between states so motion is easy to watch
 NEUTRAL_HOLD = 1.0      # hold resting posture before exit (PWM stays enabled)
+CALIBRATE_HOLD = 30.0   # seconds to hold 90/90 for horn alignment check
 
 
 # -----------------------------------------------------------------------------
@@ -79,14 +85,18 @@ def clamp_rear(angle):
 
 
 def apply_angles(hat, front=None, rear=None, label=""):
-    """Write current (or updated) angles to the pHAT and log (ASCII only)."""
+    """Write current (or updated) angles to the pHAT and log (ASCII only).
+
+    Every move_servo_position call uses SERVO_SWING=180 so that 90 deg is the
+    midpoint of the default 1.0-2.0 ms pulse range.
+    """
     global front_angle, rear_angle
     if front is not None:
         front_angle = clamp_front(front)
-        hat.move_servo_position(FRONT_CHANNEL, front_angle)
+        hat.move_servo_position(FRONT_CHANNEL, front_angle, SERVO_SWING)
     if rear is not None:
         rear_angle = clamp_rear(rear)
-        hat.move_servo_position(REAR_CHANNEL, rear_angle)
+        hat.move_servo_position(REAR_CHANNEL, rear_angle, SERVO_SWING)
     tag = "  [%s]" % label if label else ""
     print("FRONT ch0=%3d deg  REAR ch1=%3d deg%s" % (front_angle, rear_angle, tag))
 
@@ -178,28 +188,65 @@ def run_one_cycle(hat):
     time.sleep(STATE_PAUSE)
 
 
+def run_calibrate(hat):
+    """
+    Safe calibration-only mode: command both servos to 90 deg once (via
+    apply_angles / swing=180) and hold. No gait, no sweeping.
+    """
+    print("CALIBRATE mode: both servos to %d deg (swing=%d)." % (
+        FRONT_NEUTRAL, SERVO_SWING))
+    print("Check physical horn alignment / level resting posture.")
+    print("No sweeping. Ctrl+C to exit early.\n")
+
+    apply_angles(hat, front=FRONT_NEUTRAL, rear=REAR_NEUTRAL, label="calibrate 90")
+    # Do not re-send angle commands during the hold (jitter diagnosis friendly).
+    try:
+        elapsed = 0
+        hold_s = int(CALIBRATE_HOLD)
+        while elapsed < hold_s:
+            time.sleep(1)
+            elapsed += 1
+            print("Holding neutral... %d / %d s" % (elapsed, hold_s))
+        print("Calibration hold complete. PWM last commanded at 90/90. Done.")
+    except KeyboardInterrupt:
+        print("\nCtrl+C - ending calibration hold.")
+        # Re-assert neutral once so horns stay at mid-pulse before exit.
+        apply_angles(hat, front=FRONT_NEUTRAL, rear=REAR_NEUTRAL, label="calibrate hold")
+        print("Done.")
+
+
 def main():
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
         print(__doc__)
         sys.exit(0)
 
+    calibrate = "--calibrate" in args
     loop = "--loop" in args
     # Default and --once: single cycle
     once = (not loop) or ("--once" in args)
 
     print("Initializing Servo pHAT...")
+    print("SERVO_SWING=%d (90 deg = midpoint of 1.0-2.0 ms pulse)" % SERVO_SWING)
     print("FRONT CH%d: %d-%d, neutral %d" % (
         FRONT_CHANNEL, FRONT_MIN, FRONT_MAX, FRONT_NEUTRAL))
     print("REAR  CH%d: %d-%d, neutral %d" % (
         REAR_CHANNEL, REAR_MIN, REAR_MAX, REAR_NEUTRAL))
     print("Mapping: REAR_A=%d REAR_B=%d  FRONT_A=%d FRONT_B=%d" % (
         REAR_A, REAR_B, FRONT_A, FRONT_B))
-    print("Mode: %s" % ("continuous --loop" if loop else "single cycle --once"))
+    if calibrate:
+        print("Mode: calibrate-only (hold 90/90, no gait)")
+    else:
+        print("Mode: %s" % ("continuous --loop" if loop else "single cycle --once"))
     print("Distance sensor NOT used. Ctrl+C -> both to neutral.\n")
 
     hat = pi_servo_hat.PiServoHat()
     hat.restart()
+
+    if calibrate:
+        run_calibrate(hat)
+        return
+
     apply_angles(hat, front=FRONT_NEUTRAL, rear=REAR_NEUTRAL, label="start")
     time.sleep(0.5)
 
@@ -231,3 +278,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
