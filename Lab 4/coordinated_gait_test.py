@@ -10,15 +10,13 @@ Gait (discrete state machine):
   2) Hold CH1 at A; CH0 short stroke toward FRONT_A
   3) CH1 A -> B while CH0 reverses toward FRONT_B
   4) Hold CH1 at B; CH0 opposite short stroke toward FRONT_B
-     (completes / holds the B stroke, then for a clean cycle
-      both return toward neutral before the next cycle)
   5) Repeat (continuous mode) or stop (single-cycle mode)
 
-Physical directions are unverified — flip the mapping constants below
+Physical directions are unverified -- flip the mapping constants below
 if left/right or front stroke feel reversed.
 
 Usage (from Lab 4, with venv activated):
-  python coordinated_gait_test.py           # one safe cycle, then neutral
+  python coordinated_gait_test.py           # one safe cycle, then hold neutral
   python coordinated_gait_test.py --once    # same as default
   python coordinated_gait_test.py --loop    # repeat until Ctrl+C
 """
@@ -30,41 +28,42 @@ import pi_servo_hat
 # =============================================================================
 # Channels
 # =============================================================================
-FRONT_CHANNEL = 0  # CH0 — front legs
-REAR_CHANNEL = 1   # CH1 — rear legs
+FRONT_CHANNEL = 0  # CH0 - front legs
+REAR_CHANNEL = 1   # CH1 - rear legs
 
 # =============================================================================
 # Angle limits (keep within these clamps)
 # =============================================================================
 FRONT_NEUTRAL = 90
-FRONT_MIN = 80
-FRONT_MAX = 100
+FRONT_MIN = 60
+FRONT_MAX = 120
 
 REAR_NEUTRAL = 90
 REAR_MIN = 70
 REAR_MAX = 110
 
 # =============================================================================
-# Direction mapping — flip these if the cardboard moves the wrong way
+# Direction mapping -- flip these if the cardboard moves the wrong way
 # =============================================================================
 # CH1 first tilt extreme (state 1). Swap REAR_A / REAR_B to invert left/right.
 REAR_A = REAR_MAX   # 110
 REAR_B = REAR_MIN   # 70
 
 # CH0 stroke targets. Swap FRONT_A / FRONT_B to invert stroke direction.
-FRONT_A = FRONT_MAX  # 100 — stroke used while rear is at REAR_A
-FRONT_B = FRONT_MIN  # 80  — opposite stroke while rear is at REAR_B
+FRONT_A = FRONT_MAX  # 120 -- stroke used while rear is at REAR_A
+FRONT_B = FRONT_MIN  # 60  -- opposite stroke while rear is at REAR_B
 
 # =============================================================================
 # Timing (slow for calibration)
 # =============================================================================
 STEP = 1
 STEP_DELAY = 0.05
-STATE_PAUSE = 0.3  # brief pause between states so motion is easy to watch
+STATE_PAUSE = 0.3       # brief pause between states so motion is easy to watch
+NEUTRAL_HOLD = 1.0      # hold resting posture before exit (PWM stays enabled)
 
 
 # -----------------------------------------------------------------------------
-# Servo helpers — always step 1° at a time (no abrupt jumps)
+# Servo helpers -- always step 1 deg at a time (no abrupt jumps)
 # -----------------------------------------------------------------------------
 
 front_angle = FRONT_NEUTRAL
@@ -80,7 +79,7 @@ def clamp_rear(angle):
 
 
 def apply_angles(hat, front=None, rear=None, label=""):
-    """Write current (or updated) angles to the pHAT and log."""
+    """Write current (or updated) angles to the pHAT and log (ASCII only)."""
     global front_angle, rear_angle
     if front is not None:
         front_angle = clamp_front(front)
@@ -88,12 +87,12 @@ def apply_angles(hat, front=None, rear=None, label=""):
     if rear is not None:
         rear_angle = clamp_rear(rear)
         hat.move_servo_position(REAR_CHANNEL, rear_angle)
-    tag = f"  [{label}]" if label else ""
-    print(f"FRONT ch0={front_angle:3d}°  REAR ch1={rear_angle:3d}°{tag}")
+    tag = "  [%s]" % label if label else ""
+    print("FRONT ch0=%3d deg  REAR ch1=%3d deg%s" % (front_angle, rear_angle, tag))
 
 
 def move_front_to(hat, target, state_name):
-    """Smoothly walk CH0 to target in 1° steps. CH1 unchanged."""
+    """Smoothly walk CH0 to target in 1 deg steps. CH1 unchanged."""
     global front_angle
     target = clamp_front(target)
     if front_angle == target:
@@ -106,7 +105,7 @@ def move_front_to(hat, target, state_name):
 
 
 def move_rear_to(hat, target, state_name):
-    """Smoothly walk CH1 to target in 1° steps. CH0 unchanged."""
+    """Smoothly walk CH1 to target in 1 deg steps. CH0 unchanged."""
     global rear_angle
     target = clamp_rear(target)
     if rear_angle == target:
@@ -122,6 +121,7 @@ def move_both_to(hat, front_target, rear_target, state_name):
     """
     Move CH0 and CH1 together toward targets without jumps.
     Interpolates over the longer travel so both finish together.
+    Tracks current commanded angles (front_angle / rear_angle).
     """
     global front_angle, rear_angle
     front_target = clamp_front(front_target)
@@ -135,10 +135,21 @@ def move_both_to(hat, front_target, rear_target, state_name):
         time.sleep(STEP_DELAY)
 
 
-def return_both_to_neutral(hat):
-    """Smoothly return both servos to 90° (used on Ctrl+C and end of --once)."""
+def return_both_to_neutral(hat, hold=True):
+    """
+    Smoothly interpolate both servos from current commanded angles to 90 deg.
+    Re-asserts the neutral command so PWM keeps holding the resting posture.
+    Does NOT disable servo PWM.
+    """
     print("--- returning both servos to neutral ---")
     move_both_to(hat, FRONT_NEUTRAL, REAR_NEUTRAL, "NEUTRAL")
+    # Re-command neutral so the pHAT keeps driving the resting pose.
+    apply_angles(hat, front=FRONT_NEUTRAL, rear=REAR_NEUTRAL, label="HOLD neutral")
+    if hold:
+        print("Holding level resting posture (PWM still enabled)...")
+        time.sleep(NEUTRAL_HOLD)
+        # Final re-assert before caller exits; pHAT may keep last PWM after exit.
+        apply_angles(hat, front=FRONT_NEUTRAL, rear=REAR_NEUTRAL, label="HOLD neutral")
 
 
 # -----------------------------------------------------------------------------
@@ -146,7 +157,7 @@ def return_both_to_neutral(hat):
 # -----------------------------------------------------------------------------
 
 def run_one_cycle(hat):
-    """Execute states 1–4 once. Leaves legs at end-of-state-4 pose."""
+    """Execute states 1-4 once. Leaves legs at end-of-state-4 pose."""
     print("\n=== STATE 1: rear tilt to A; front stays neutral ===")
     move_front_to(hat, FRONT_NEUTRAL, "S1 hold front")
     move_rear_to(hat, REAR_A, "S1 rear -> A")
@@ -162,7 +173,7 @@ def run_one_cycle(hat):
 
     print("\n=== STATE 4: hold rear at B; opposite front stroke at B ===")
     # Opposite stroke target is FRONT_B (reached during state 3).
-    # Re-assert / finish at FRONT_B while rear holds REAR_B — no jump.
+    # Re-assert / finish at FRONT_B while rear holds REAR_B -- no jump.
     move_front_to(hat, FRONT_B, "S4 front stroke B")
     time.sleep(STATE_PAUSE)
 
@@ -178,10 +189,13 @@ def main():
     once = (not loop) or ("--once" in args)
 
     print("Initializing Servo pHAT...")
-    print(f"FRONT CH{FRONT_CHANNEL}: {FRONT_MIN}–{FRONT_MAX}, neutral {FRONT_NEUTRAL}")
-    print(f"REAR  CH{REAR_CHANNEL}: {REAR_MIN}–{REAR_MAX}, neutral {REAR_NEUTRAL}")
-    print(f"Mapping: REAR_A={REAR_A} REAR_B={REAR_B}  FRONT_A={FRONT_A} FRONT_B={FRONT_B}")
-    print(f"Mode: {'continuous --loop' if loop else 'single cycle --once'}")
+    print("FRONT CH%d: %d-%d, neutral %d" % (
+        FRONT_CHANNEL, FRONT_MIN, FRONT_MAX, FRONT_NEUTRAL))
+    print("REAR  CH%d: %d-%d, neutral %d" % (
+        REAR_CHANNEL, REAR_MIN, REAR_MAX, REAR_NEUTRAL))
+    print("Mapping: REAR_A=%d REAR_B=%d  FRONT_A=%d FRONT_B=%d" % (
+        REAR_A, REAR_B, FRONT_A, FRONT_B))
+    print("Mode: %s" % ("continuous --loop" if loop else "single cycle --once"))
     print("Distance sensor NOT used. Ctrl+C -> both to neutral.\n")
 
     hat = pi_servo_hat.PiServoHat()
@@ -193,28 +207,26 @@ def main():
         cycle = 0
         while True:
             cycle += 1
-            print(f"\n########## GAIT CYCLE {cycle} ##########")
+            print("\n########## GAIT CYCLE %d ##########" % cycle)
             run_one_cycle(hat)
 
             if once and not loop:
-                print("\nSingle-cycle mode: returning to neutral and exiting.")
-                return_both_to_neutral(hat)
-                print("Done.")
+                print("\nSingle-cycle mode: returning BOTH servos to neutral.")
+                return_both_to_neutral(hat, hold=True)
+                print("Resting posture ready for next test. Done.")
                 return
 
-            # Continuous: return front to neutral, then rear B -> A via next cycle's state 1.
-            # Bridge: front to neutral while rear holds B so state 1 starts cleanly.
+            # Continuous: return front to neutral, then rear B -> A via next cycle state 1.
             print("\n=== BRIDGE: front to neutral before next cycle ===")
             move_front_to(hat, FRONT_NEUTRAL, "bridge")
-            # Next state 1 moves rear B -> A (via move_rear_to from current).
 
     except KeyboardInterrupt:
-        print("\nCtrl+C — stopping gait...")
+        print("\nCtrl+C - stopping gait...")
         try:
-            return_both_to_neutral(hat)
+            return_both_to_neutral(hat, hold=True)
         except Exception as exc:
-            print(f"Warning: could not return to neutral: {exc}", file=sys.stderr)
-        print("Done.")
+            print("Warning: could not return to neutral: %s" % exc, file=sys.stderr)
+        print("Resting posture held. Done.")
 
 
 if __name__ == "__main__":
