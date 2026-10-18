@@ -4,7 +4,7 @@ Delivery Robot 1.0 -- reliability-focused MVP (standalone).
 
 Integrates proven behavior from:
   - coordinated_gait_test.py  (strictly sequential alternating crawl)
-  - low_sway_gait_test.py     (CH1 smooth crawl speed; amplitude tuned to 75-105)
+  - low_sway_gait_test.py     (CH1 smooth crawl speed; amplitude tuned to 75-110)
   - sensor_crawl_test.py      (VCNL4040 delivery confirm + rest sequence)
 
 Does NOT import those test scripts. Uses only course libraries:
@@ -46,12 +46,12 @@ FRONT_STEP = 3
 FRONT_STEP_DELAY = 0.01
 
 # =============================================================================
-# CH1 rear -- smooth crawl; 75-105 compensates cardboard asymmetry
+# CH1 rear -- smooth crawl; 75-110 (110 gives more support than 105)
 # =============================================================================
 REAR_NEUTRAL = 90
 REAR_MIN = 75
-REAR_MAX = 105
-REAR_A = REAR_MAX  # 105
+REAR_MAX = 110
+REAR_A = REAR_MAX  # 110
 REAR_B = REAR_MIN  # 75
 REAR_STEP = 1
 REAR_STEP_DELAY = 0.02
