@@ -21,7 +21,8 @@
 ---
 
 ## Lab Overview
-Team: <canvas group name>  
+Team: 
+
 Members: Daniel Xing (yx753) github:https://github.com/DanielXing373/Interactive-Lab-Hub/tree/Fall2026/Lab%204
 
 Project name: Patroller
@@ -522,6 +523,11 @@ Members: Daniel Xing (yx753) github:https://github.com/DanielXing373/Interactive
 
 Project name: Patroller
 
+Here is the link to the video (please show my video!):
+
+https://drive.google.com/file/d/1Hxyn-Zins9fGDWAwAr1LJmw8FdlNuvOU/view?usp=sharing
+
+
 ---
 
 ### Part D
@@ -535,23 +541,46 @@ Project name: Patroller
 
 **\*\*\*What questions do these sketches raise? What do you need to physically prototype to answer them?\*\*\***
 
-<!-- Your answer -->
+It raises lots of the question. Since i have a limited amount of motors, and they are relatively weak, I need to try out different weights, arrangements, and placement so that the bot can actually move. That coordination between the parts, after installed on the cardboard, needs to be physically prototyped. 
+
+Also, the speed, angle for the rotation, and other values need to be tested in the real world. 
 
 
 
 **\*\*\*Pick one design to prototype and explain why.\*\*\***
 
-<!-- Your answer -->
+After finalizing my choice to make the patroller, I need to check the dimensions of all the parts. And more importantly, the coordination between all the parts. I tried out with several versions of leg lengths, and decided the last one based on its mobility and stability. That strictly requires a physical prototype before I eventually try to make it move.
 
+Also, for the distance sensor, the threshold needs to be determined with a physical prototype. I activated it, tried with different values so that it can stop at a distance I feel comfortable to grab the drink. 
 
 
 Build a cardboard or other low-fidelity physical prototype of your design.
 
 **\*\*\*Document your rough prototype with photos and/or video.\*\*\***
 
-<!-- Add / link photos and/or video here -->
+Since I don't have strong cohesive materials like hot clues as used in the tutorial, I designed the front legs as shown in the picture. I tried three kind of glues from Island Discount, and finally found one that is strong and fast enough. I've added 8 patches in total to make sure the think cardboard can provide enough power, through friction, to move the bot. 
 
+<img width="3024" height="4032" alt="IMG_8828" src="https://github.com/user-attachments/assets/c2521b89-0e05-40a6-b687-c5a6a3ad3cf7" />
 
+For positioning the servo for the front leg, I marked the place at the front side of the bottom. I chose that place mainly for better positioning of the servo inside the box. As for the motion, as long as it is somewhere in the middle, I think it will work. 
+
+<img width="3024" height="4032" alt="IMG_8829" src="https://github.com/user-attachments/assets/7dc158f5-fb31-43f0-af8d-66acc031447f" />
+
+The back leg broke twice during prototyping. Because the cardboard is too weak, it can't hold the weight of the box, plus those electronics. I added patches in the way as shown in the picture, to fix their breaking bones. 
+
+<img width="3024" height="4032" alt="IMG_8833" src="https://github.com/user-attachments/assets/16e1011d-75f7-4007-8c88-36c5ecddf0c1" />
+
+Bottom view of the box with two legs. 
+<img width="4032" height="3024" alt="IMG_8832" src="https://github.com/user-attachments/assets/257db082-3b4e-4994-b1af-8c48377a2efd" />
+
+Distance sensor being taped at the front. 
+<img width="4032" height="3024" alt="IMG_8834" src="https://github.com/user-attachments/assets/5332963a-c395-45a6-821c-fb01a44b41bb" />
+
+After everything is done, the bot can finally move as expected. Then, I added nosepads, as the one on glasses, on the front legs to add more friction. I trimmed the sides of the back leg for less contact surface area, which in turns reduces friction. I've also added smooth plastics on the tip of the back leg to further decrease the friction. All those changes are to reduce the resistance. In other words, for the bot to more in a more powerful way. 
+
+I've also tried out more than 10 combinations of speed and angle, for it to move at a proper speed and wobble at a acceptable degree. Since it is a bot that serves dishes, we don't want it to wobble too much to serve successfully. 
+
+One major change I made from the tutorial is the moving pattern. In the tutorial, both legs move simultaneously. Based on my research and trials with my materials, it is more stable and effective for the bot to move separately. One benefit of that is, we can then modify the duration of each movement, to better calibrate the state of the machine. In other words, to cover up the lack of accuracy for this coarse hand-made prototype. 
 
 ---
 
@@ -568,12 +597,14 @@ Build a cardboard or other low-fidelity physical prototype of your design.
 **Document your system with:**
 - Code for your sensing + actuation prototype
 
-<!-- Link your code, e.g. delivery_robot_v1.py -->
+The main script is: delivery_robot_v1.py
 
 
 - Photos and/or video of the working prototype in action
 
-<!-- Add / link photos and/or video here -->
+Here is the same link again:
+
+https://drive.google.com/file/d/1Hxyn-Zins9fGDWAwAr1LJmw8FdlNuvOU/view?usp=sharing
 
 
 - A simple interaction diagram or sketch showing how sensing and actuation are connected
@@ -583,30 +614,35 @@ Build a cardboard or other low-fidelity physical prototype of your design.
 
 - Written reflection: What did you learn about connecting sensing, movement, and physical form? What was fun, surprising, or challenging?
 
-<!-- Your answer -->
+Building something I like is really fun. And trying out different materials, either to make compromises for discover surprises are also interesting. The glue I ended up using has a really high quality that is way beyond my expectation. 
+
+In addition, make a robot that moves with only two motors is surprising to me at the beginning. 
+
+The challenging part is the short amount of time I had. I didn't have enough time, as a group of one, to explore more ways that could be potentially helpful, including 3D printing, glue guns, and iterations of the design. Even though I can do multiple researches, I usually have only one chance during the real development part. And since the glue is extra strong, it made me worried a lot when I was putting motors on the box. 
+
 
 
 
 **Questions to consider:**
 - How does your chosen sensor or input shape the physical response?
 
-<!-- Your answer -->
+The patroller now stops at a comfortable distance for the user to grab the drink. With this sensor, I don't need to calculate how long it should walk before stop, and I left also a lot of places for future improvements. 
 
+One interesting fact is that as it detects objects, it then goes into I call it the return state. In that state, the noise from the motor is a lot different from a moving state. As a result, the user can actually hear and feel the patroller who just finished the job. 
 
 - How does the physical arrangement of the sensor and actuator change the interaction?
 
-<!-- Your answer -->
-
+The arrangement allows the patroller to move with two motors and detect objects that is in front of them. Its journey is to walk ahead, and stops around 20 cm before it hits the thing that is in front of it. 
 
 - What thresholds, timing, or movement patterns make the interaction feel clear or playful?
 
-<!-- Your answer -->
+First of all, the distance. If it stops further away, I have to stand up to grab the drink. It is stops too late, I'll need to bend my arms before I can reach. 
 
+Also, the speed and the angle. Based on my adjustment, it moves much more proper and wobbles in a safe range than it was made at the beginning. 
 
 - What changes when you adjust the sensor placement or servo motion?
 
-<!-- Your answer -->
-
+I mainly considered heights, which is the coordination between servos. I've also considered about length of the cable, because there might be unexpected stretches during the movement. 
 
 
 ---
@@ -618,18 +654,17 @@ Build a cardboard or other low-fidelity physical prototype of your design.
 Document all the prototypes and iterations you have designed and worked on! Again, deliverables for this lab are writings, sketches, photos, and videos that show what your prototype:
 * "Looks like": shows how the device should look, feel, sit, weigh, etc.
 
-<!-- Your answer / links -->
+It looks like the patroller in Identity V. It is basically a dog with somewhat creepy looks. It serves food by having it on its head. 
 
+<img width="4032" height="3024" alt="IMG_8835 2" src="https://github.com/user-attachments/assets/bedc9cab-0ea1-4bce-b89a-b9e45225b4e8" />
 
 * "Works like": shows what the device can do
 
-<!-- Your answer / links -->
-
+It can transport food, here it is a cup of coke, to its owner. It can stop at around 20 cm before it hits the owner, so the owner can grab the coke comfortably. 
 
 * "Acts like": shows how a person would interact with the device
 
-<!-- Your answer / links -->
-
+A person can stay assured in the seat. When they see the patroller stop, or hear a change in pattern in the noise made by the motors, they can go grab the drink. 
 
 
 ---
