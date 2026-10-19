@@ -515,12 +515,12 @@ For submission, the readme.md page for this lab should be edited to include the 
 
 ## Lab 4 Answers
 
-Fill in below. Question wording matches the Lab README prompts.
 
 ### Lab Overview
-Team: <canvas group name>  
-Members: Full Name (netid, github-handle), ...  
-Project name: <name>
+Team:
+Members: Daniel Xing (yx753) github:https://github.com/DanielXing373/Interactive-Lab-Hub/tree/Fall2026/Lab%204
+
+Project name: Patroller
 
 ---
 
