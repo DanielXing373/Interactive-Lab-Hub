@@ -521,11 +521,17 @@ For submission, the readme.md page for this lab should be edited to include the 
 Team:
 Members: Daniel Xing (yx753) github: https://github.com/DanielXing373/Interactive-Lab-Hub/tree/Fall2026/Lab%204
 
-Project name: Patroller
+Project name: The Patroller
 
 Here is the link to the video (please show my video!):
 
 https://drive.google.com/file/d/1Hxyn-Zins9fGDWAwAr1LJmw8FdlNuvOU/view?usp=sharing
+
+This project is inspired from an Adafruit learning tutorial, where it uses stronger parts to build a bot that crawls with two motors: https://learn.adafruit.com/assets/54695
+
+This project uses AI for coding the documentation formatting.
+
+Special thanks to Lemuel from the Maker Lab, for suggesting a drink holder that keeps the drink in place. 
 
 
 ---
