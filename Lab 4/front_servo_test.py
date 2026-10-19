@@ -2,7 +2,7 @@
 """
 Slow continuous back-and-forth test for the FRONT servo only (Channel 0).
 
-Reuses SparkFun Servo pHAT via pi_servo_hat (same as rear_servo_test.py).
+Reuses SparkFun Servo pHAT via pi_servo_hat.
 Does NOT touch Channel 1 (rear) or the distance sensor.
 
 Sweep: 80° <-> 100°, 1° steps, 0.05 s per step. Starts and stops at 90°.

@@ -1,6 +1,10 @@
 # Ph-UI!!!
 
 <details>
+	<summary><strong>Course Lab Instructions (Click to Expand)</strong></summary>
+
+
+<details>
 	<summary><strong>Instructions for Students (Click to Expand)</strong></summary>
   
 	**Submission Cleanup Reminder:**
@@ -490,6 +494,143 @@ Document all the prototypes and iterations you have designed and worked on! Agai
 * "Looks like": shows how the device should look, feel, sit, weigh, etc.
 * "Works like": shows what the device can do
 * "Acts like": shows how a person would interact with the device
+
+---
+
+## Deliverables \& Submission for Lab 4
+
+The deliverables for this lab are, writings, sketches, photos, and videos that show what your prototype:
+* "Looks like": shows how the device should look, feel, sit, weigh, etc.
+* "Works like": shows what the device can do.
+* "Acts like": shows how a person would interact with the device.
+
+For submission, the readme.md page for this lab should be edited to include the work you have done:
+* Upload any materials that explain what you did, into your lab 4 repository, and link them in your lab 4 readme.md.
+* Link your Lab 4 readme.md in your main Interactive-Lab-Hub readme.md. 
+* Labs are due on Mondays, make sure to submit your Lab 4 readme.md to Canvas.
+
+</details>
+
+---
+
+## Lab 4 Answers
+
+Fill in below. Question wording matches the Lab README prompts.
+
+### Lab Overview
+Team: <canvas group name>  
+Members: Full Name (netid, github-handle), ...  
+Project name: <name>
+
+---
+
+### Part D
+### Physical Interaction Design: Feast Automata
+
+**\*\*\*Draw 5 sketches that explore different physical arrangements for your sensing and actuation.\*\*\***
+
+<!-- Add / link your 5 sketches here -->
+
+
+
+**\*\*\*What questions do these sketches raise? What do you need to physically prototype to answer them?\*\*\***
+
+<!-- Your answer -->
+
+
+
+**\*\*\*Pick one design to prototype and explain why.\*\*\***
+
+<!-- Your answer -->
+
+
+
+Build a cardboard or other low-fidelity physical prototype of your design.
+
+**\*\*\*Document your rough prototype with photos and/or video.\*\*\***
+
+<!-- Add / link photos and/or video here -->
+
+
+
+---
+
+### Part E
+
+#### Build & Integrate: Sensing + Actuation
+
+**Your prototype should:**
+- Use at least one sensing or input device.
+- Use servo-based physical actuation.
+- Connect sensing and actuation into a meaningful interaction around eating, drinking, cooking, serving, or sharing food.
+- Additional inputs, displays, LEDs, buttons, or other outputs are optional extensions.
+
+**Document your system with:**
+- Code for your sensing + actuation prototype
+
+<!-- Link your code, e.g. delivery_robot_v1.py -->
+
+
+- Photos and/or video of the working prototype in action
+
+<!-- Add / link photos and/or video here -->
+
+
+- A simple interaction diagram or sketch showing how sensing and actuation are connected
+
+<!-- Add / link diagram here -->
+
+
+- Written reflection: What did you learn about connecting sensing, movement, and physical form? What was fun, surprising, or challenging?
+
+<!-- Your answer -->
+
+
+
+**Questions to consider:**
+- How does your chosen sensor or input shape the physical response?
+
+<!-- Your answer -->
+
+
+- How does the physical arrangement of the sensor and actuator change the interaction?
+
+<!-- Your answer -->
+
+
+- What thresholds, timing, or movement patterns make the interaction feel clear or playful?
+
+<!-- Your answer -->
+
+
+- What changes when you adjust the sensor placement or servo motion?
+
+<!-- Your answer -->
+
+
+
+---
+
+### Part F
+
+### Final Documentation
+
+Document all the prototypes and iterations you have designed and worked on! Again, deliverables for this lab are writings, sketches, photos, and videos that show what your prototype:
+* "Looks like": shows how the device should look, feel, sit, weigh, etc.
+
+<!-- Your answer / links -->
+
+
+* "Works like": shows what the device can do
+
+<!-- Your answer / links -->
+
+
+* "Acts like": shows how a person would interact with the device
+
+<!-- Your answer / links -->
+
+
 
 ---
 

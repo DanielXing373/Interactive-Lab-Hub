@@ -15,7 +15,7 @@ IMPORTANT — how to read the numbers:
 Calibrate STOP_THRESHOLD by watching printed values:
   1) Clear path (no hand/object)  -> note typical "far" reading
   2) Hand/object at stop distance -> note typical "near" reading
-  3) Pick a threshold between those two (used later in delivery_robot.py)
+  3) Pick a threshold between those two (used later in delivery_robot_v1.py)
 
 Usage:
   python distance_sensor_test.py

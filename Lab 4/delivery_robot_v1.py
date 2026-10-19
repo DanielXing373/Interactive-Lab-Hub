@@ -1,75 +1,61 @@
 #!/usr/bin/env python3
 """
-Delivery Robot 1.0 -- reliability-focused MVP (standalone).
+Delivery Robot 1.0 -- production entry point (standalone).
 
-Integrates proven behavior from:
-  - coordinated_gait_test.py  (strictly sequential alternating crawl)
-  - low_sway_gait_test.py     (CH1 smooth crawl speed; amplitude tuned to 75-110)
-  - sensor_crawl_test.py      (VCNL4040 delivery confirm + rest sequence)
+Sequential crawl + VCNL4040 delivery detection.
+Uses course libraries only: pi_servo_hat, qwiic_proximity.
 
-Does NOT import those test scripts. Uses only course libraries:
-  pi_servo_hat, qwiic_proximity
+Gait (one servo at a time; CH0 holds during CH1 side switch):
+  CH1 -> A, CH0 stroke A, CH1 -> B, CH0 stroke B, repeat
 
-Gait (one servo at a time; CH0 never repositioned before CH1 switches):
-  CH1 -> A, CH0 stroke A, CH1 -> B (CH0 holds), CH0 stroke B, repeat
-
-On delivery (3 consecutive proximity readings >= threshold):
-  stop crawl permanently -> CH0 to 90 -> CH1 to 90 -> hold 1s
-  -> print DELIVERY COMPLETE -> exit (no resume)
+Delivery (3 consecutive proximity readings >= 20):
+  stop crawl -> CH0 to 90 -> CH1 to 90 -> hold 1s
+  -> print DELIVERY COMPLETE -> exit
 
 Usage (from Lab 4, with venv activated):
   python delivery_robot_v1.py
-  python delivery_robot_v1.py --threshold 20
+  python delivery_robot_v1.py --self-check
 """
 
 import sys
 import time
-import pi_servo_hat
-import qwiic_proximity
+
+# Hardware libs imported lazily so --self-check runs without Pi packages.
 
 # =============================================================================
-# Hardware channels
+# Hardware
 # =============================================================================
-FRONT_CHANNEL = 0  # CH0 front
-REAR_CHANNEL = 1   # CH1 rear
-SERVO_SWING = 180  # 90 deg = midpoint of 1.0-2.0 ms pulse
+FRONT_CHANNEL = 0
+REAR_CHANNEL = 1
+SERVO_SWING = 180
 
-# =============================================================================
-# CH0 front -- proven Fast crawl
-# =============================================================================
+# CH0 Fast crawl
 FRONT_NEUTRAL = 90
 FRONT_MIN = 60
 FRONT_MAX = 120
-FRONT_A = FRONT_MAX  # 120
-FRONT_B = FRONT_MIN  # 60
+FRONT_A = 120
+FRONT_B = 60
 FRONT_STEP = 3
 FRONT_STEP_DELAY = 0.01
 
-# =============================================================================
-# CH1 rear -- smooth crawl; 75-110 (110 gives more support than 105)
-# =============================================================================
+# CH1 Smooth crawl (asymmetric calibration)
 REAR_NEUTRAL = 90
 REAR_MIN = 75
 REAR_MAX = 110
-REAR_A = REAR_MAX  # 110
-REAR_B = REAR_MIN  # 75
+REAR_A = 110
+REAR_B = 75
 REAR_STEP = 1
 REAR_STEP_DELAY = 0.02
 
-# =============================================================================
-# Neutral return / hold (delivery completion + Ctrl+C)
-# =============================================================================
+# Neutral return (delivery completion + Ctrl+C)
 NEUTRAL_STEP = 1
 NEUTRAL_STEP_DELAY = 0.05
 STATE_PAUSE = 0.15
 NEUTRAL_HOLD = 1.0
 
-# =============================================================================
-# Delivery detection (raw proximity counts; higher = closer)
-# =============================================================================
+# Delivery detection (raw counts; higher = closer)
 DELIVERY_THRESHOLD = 20
 CONFIRM_READINGS = 3
-SENSOR_CHECK_EVERY_STEPS = 1
 
 # =============================================================================
 # Runtime state
@@ -83,11 +69,12 @@ delivery_complete = False
 delivery_hit_count = 0
 gait_phase = 0  # 0 CH1->A, 1 CH0->A, 2 CH1->B, 3 CH0->B
 
+# (channel, target, label)
 PHASES = (
-    ("CH1", "REAR_A", REAR_A, "tilt A"),
-    ("CH0", "FRONT_A", FRONT_A, "stroke A"),
-    ("CH1", "REAR_B", REAR_B, "tilt B"),
-    ("CH0", "FRONT_B", FRONT_B, "stroke B"),
+    ("CH1", REAR_A, "tilt A"),
+    ("CH0", FRONT_A, "stroke A"),
+    ("CH1", REAR_B, "tilt B"),
+    ("CH0", FRONT_B, "stroke B"),
 )
 
 
@@ -99,29 +86,28 @@ def clamp_rear(angle):
     return max(REAR_MIN, min(REAR_MAX, int(angle)))
 
 
-def _log_pose(label, moving):
-    print("FRONT ch0=%3d deg  REAR ch1=%3d deg  [%s | moving=%s]" % (
-        front_angle, rear_angle, label, moving))
-
-
-def set_front(angle, label):
-    """Command CH0 only."""
+def set_front(angle, label=None):
+    """Command CH0 only. Optional label logs once (not every micro-step)."""
     global front_angle
     if hat is None:
         return
     front_angle = clamp_front(angle)
     hat.move_servo_position(FRONT_CHANNEL, front_angle, SERVO_SWING)
-    _log_pose(label, "CH0")
+    if label is not None:
+        print("FRONT ch0=%3d deg  REAR ch1=%3d deg  [%s | moving=CH0]" % (
+            front_angle, rear_angle, label))
 
 
-def set_rear(angle, label):
-    """Command CH1 only."""
+def set_rear(angle, label=None):
+    """Command CH1 only. Optional label logs once (not every micro-step)."""
     global rear_angle
     if hat is None:
         return
     rear_angle = clamp_rear(angle)
     hat.move_servo_position(REAR_CHANNEL, rear_angle, SERVO_SWING)
-    _log_pose(label, "CH1")
+    if label is not None:
+        print("FRONT ch0=%3d deg  REAR ch1=%3d deg  [%s | moving=CH1]" % (
+            front_angle, rear_angle, label))
 
 
 def _next_angle(current, target, step_size):
@@ -138,6 +124,7 @@ def _next_angle(current, target, step_size):
 
 def init_sensor():
     global proximity_sensor
+    import qwiic_proximity
     print("Initializing Qwiic proximity sensor (VCNL4040)...")
     proximity_sensor = qwiic_proximity.QwiicProximity()
     if not proximity_sensor.connected:
@@ -157,10 +144,7 @@ def read_proximity():
 
 
 def check_delivery(prox):
-    """
-    Confirm delivery after CONFIRM_READINGS consecutive samples
-    >= DELIVERY_THRESHOLD. Permanent once set.
-    """
+    """Confirm after CONFIRM_READINGS consecutive samples >= threshold."""
     global delivery_hit_count, delivery_complete
 
     if delivery_complete:
@@ -186,23 +170,19 @@ def check_delivery(prox):
 
 
 # =============================================================================
-# Sequential motion (one channel per step; exact target landing)
+# Sequential motion
 # =============================================================================
 
 def move_front_to(target, state_name, step_size=None, step_delay=None,
                   check_sensor=True):
-    """
-    Move CH0 only. Returns True if target reached.
-    Returns False if delivery confirmed mid-move (pose held).
-    """
+    """Move CH0 only. False if delivery confirmed mid-move."""
     global front_angle
     if step_size is None:
         step_size = FRONT_STEP
     if step_delay is None:
         step_delay = FRONT_STEP_DELAY
     target = clamp_front(target)
-    print("  -> MOVING CH0 to %d deg (CH1 holds at %d) step=%d delay=%.3fs" % (
-        target, rear_angle, step_size, step_delay))
+    print("  -> MOVING CH0 to %d deg (CH1 holds at %d)" % (target, rear_angle))
 
     if check_sensor and check_delivery(read_proximity()):
         return False
@@ -211,32 +191,27 @@ def move_front_to(target, state_name, step_size=None, step_delay=None,
         set_front(target, state_name)
         return True
 
-    steps = 0
     while front_angle != target:
-        if check_sensor and (steps % SENSOR_CHECK_EVERY_STEPS == 0):
-            if check_delivery(read_proximity()):
-                print("  STOP CH0 at %d deg (delivery; hold pose)" % front_angle)
-                return False
-        set_front(_next_angle(front_angle, target, step_size), state_name)
+        if check_sensor and check_delivery(read_proximity()):
+            print("  STOP CH0 at %d deg (delivery; hold pose)" % front_angle)
+            return False
+        set_front(_next_angle(front_angle, target, step_size))
         time.sleep(step_delay)
-        steps += 1
+
+    set_front(front_angle, state_name)
     return True
 
 
 def move_rear_to(target, state_name, step_size=None, step_delay=None,
                  check_sensor=True):
-    """
-    Move CH1 only. Returns True if target reached.
-    Returns False if delivery confirmed mid-move (pose held).
-    """
+    """Move CH1 only. False if delivery confirmed mid-move."""
     global rear_angle
     if step_size is None:
         step_size = REAR_STEP
     if step_delay is None:
         step_delay = REAR_STEP_DELAY
     target = clamp_rear(target)
-    print("  -> MOVING CH1 to %d deg (CH0 holds at %d) step=%d delay=%.3fs" % (
-        target, front_angle, step_size, step_delay))
+    print("  -> MOVING CH1 to %d deg (CH0 holds at %d)" % (target, front_angle))
 
     if check_sensor and check_delivery(read_proximity()):
         return False
@@ -245,23 +220,19 @@ def move_rear_to(target, state_name, step_size=None, step_delay=None,
         set_rear(target, state_name)
         return True
 
-    steps = 0
     while rear_angle != target:
-        if check_sensor and (steps % SENSOR_CHECK_EVERY_STEPS == 0):
-            if check_delivery(read_proximity()):
-                print("  STOP CH1 at %d deg (delivery; hold pose)" % rear_angle)
-                return False
-        set_rear(_next_angle(rear_angle, target, step_size), state_name)
+        if check_sensor and check_delivery(read_proximity()):
+            print("  STOP CH1 at %d deg (delivery; hold pose)" % rear_angle)
+            return False
+        set_rear(_next_angle(rear_angle, target, step_size))
         time.sleep(step_delay)
-        steps += 1
+
+    set_rear(rear_angle, state_name)
     return True
 
 
 def return_both_to_neutral(hold=True):
-    """
-    Sequential conservative return to 90/90 (Ctrl+C).
-    Sensor checks disabled so cleanup cannot re-trigger delivery logic.
-    """
+    """Sequential return to 90/90 (Ctrl+C). Sensor checks off."""
     print("--- return to neutral (sequential, conservative) ---")
     print("STATE N1: MOVING CH0 to 90; CH1 holds")
     move_front_to(
@@ -285,10 +256,7 @@ def return_both_to_neutral(hold=True):
 
 
 def complete_delivery():
-    """
-    After confirm: keep current pose, then CH0->90, CH1->90,
-    hold 1s, print DELIVERY COMPLETE. No crawl resume.
-    """
+    """CH0->90, CH1->90, hold 1s, print DELIVERY COMPLETE."""
     print("Delivery rest sequence: sequential return to 90/90")
     print("STATE D1: MOVING CH0 to 90; CH1 holds at %d" % rear_angle)
     move_front_to(
@@ -314,7 +282,7 @@ def complete_delivery():
 
 
 def go_to_start_pose():
-    """Safe startup: command both to tracked neutral 90/90 sequentially."""
+    """Safe startup: sequential 90/90."""
     print("=== START POSE: sequential move to 90/90 ===")
     move_front_to(
         FRONT_NEUTRAL, "S0a CH0 -> 90",
@@ -328,24 +296,17 @@ def go_to_start_pose():
     time.sleep(0.3)
 
 
-# =============================================================================
-# Gait
-# =============================================================================
-
 def run_current_phase():
-    """
-    Execute one gait phase. Returns True if completed,
-    False if delivery confirmed (pose held).
-    """
+    """One gait phase. False if delivery confirmed."""
     global gait_phase
-    channel, name, target, desc = PHASES[gait_phase]
-    print("\n=== PHASE %d: %s -> %s=%d (%s) ===" % (
-        gait_phase, channel, name, target, desc))
+    channel, target, desc = PHASES[gait_phase]
+    print("\n=== PHASE %d: %s -> %d (%s) ===" % (
+        gait_phase, channel, target, desc))
 
     if channel == "CH1":
-        ok = move_rear_to(target, "P%d CH1 -> %s" % (gait_phase, name))
+        ok = move_rear_to(target, "P%d CH1" % gait_phase)
     else:
-        ok = move_front_to(target, "P%d CH0 -> %s" % (gait_phase, name))
+        ok = move_front_to(target, "P%d CH0" % gait_phase)
 
     if not ok:
         return False
@@ -355,20 +316,58 @@ def run_current_phase():
     return True
 
 
-def parse_args(args):
-    global DELIVERY_THRESHOLD
-    if "--help" in args or "-h" in args:
-        print(__doc__)
-        sys.exit(0)
-    if "--threshold" in args:
-        i = args.index("--threshold")
-        DELIVERY_THRESHOLD = int(args[i + 1])
+def self_check():
+    """Hardware-independent checks of pure motion / delivery logic."""
+    global delivery_complete, delivery_hit_count, front_angle, rear_angle
+
+    assert clamp_front(200) == FRONT_MAX
+    assert clamp_front(0) == FRONT_MIN
+    assert clamp_rear(200) == REAR_MAX
+    assert clamp_rear(0) == REAR_MIN
+    assert _next_angle(90, 120, 3) == 93
+    assert _next_angle(118, 120, 3) == 120
+    assert _next_angle(110, 75, 1) == 109
+    assert _next_angle(76, 75, 1) == 75
+    assert REAR_A == 110 and REAR_B == 75
+    assert FRONT_A == 120 and FRONT_B == 60
+    assert FRONT_STEP == 3 and FRONT_STEP_DELAY == 0.01
+    assert REAR_STEP == 1 and REAR_STEP_DELAY == 0.02
+    assert SERVO_SWING == 180
+    assert PHASES[0][0] == "CH1" and PHASES[1][0] == "CH0"
+    assert PHASES[2][0] == "CH1" and PHASES[3][0] == "CH0"
+
+    delivery_complete = False
+    delivery_hit_count = 0
+    front_angle = 100
+    rear_angle = 90
+    assert check_delivery(10) is False
+    assert delivery_hit_count == 0
+    assert check_delivery(25) is False
+    assert delivery_hit_count == 1
+    assert check_delivery(25) is False
+    assert delivery_hit_count == 2
+    assert check_delivery(25) is True
+    assert delivery_complete is True
+
+    delivery_complete = False
+    delivery_hit_count = 0
+    assert check_delivery(25) is False
+    assert check_delivery(5) is False
+    assert delivery_hit_count == 0
+
+    print("SELF_CHECK PASS")
+    return 0
 
 
 def main():
     global hat, gait_phase, delivery_complete, delivery_hit_count
 
-    parse_args(sys.argv[1:])
+    args = sys.argv[1:]
+    if "--help" in args or "-h" in args:
+        print(__doc__)
+        sys.exit(0)
+    if "--self-check" in args:
+        sys.exit(self_check())
 
     print("=== Delivery Robot 1.0 ===")
     print("SERVO_SWING=%d" % SERVO_SWING)
@@ -381,7 +380,6 @@ def main():
     print("Gait: sequential; CH0 holds during CH1 side switch")
     print("Ctrl+C -> sequential return to neutral.\n")
 
-    # Sensor first: fail closed (do not crawl blind)
     try:
         init_sensor()
     except Exception as exc:
@@ -390,6 +388,7 @@ def main():
         sys.exit(1)
 
     try:
+        import pi_servo_hat
         print("Initializing Servo pHAT...")
         hat = pi_servo_hat.PiServoHat()
         hat.restart()
@@ -427,8 +426,6 @@ def main():
         print("Done.")
     except Exception as exc:
         print("ERROR during crawl: %s" % exc, file=sys.stderr)
-        # Best-effort hold current pose only (no unexpected large jump).
-        # Re-assert last commanded angles if possible; do not invent new targets.
         try:
             if hat is not None:
                 set_front(front_angle, "ERR HOLD CH0")
