@@ -519,7 +519,7 @@ For submission, the readme.md page for this lab should be edited to include the 
 
 ### Lab Overview
 Team:
-Members: Daniel Xing (yx753) github:https://github.com/DanielXing373/Interactive-Lab-Hub/tree/Fall2026/Lab%204
+Members: Daniel Xing (yx753) github: https://github.com/DanielXing373/Interactive-Lab-Hub/tree/Fall2026/Lab%204
 
 Project name: Patroller
 
@@ -535,7 +535,7 @@ https://drive.google.com/file/d/1Hxyn-Zins9fGDWAwAr1LJmw8FdlNuvOU/view?usp=shari
 
 **\*\*\*Draw 5 sketches that explore different physical arrangements for your sensing and actuation.\*\*\***
 
-<!-- Add / link your 5 sketches here -->
+<img width="1629" height="1448" alt="IMG_0870" src="https://github.com/user-attachments/assets/fd4dab3f-da4e-4daa-a962-f58cc4c621a3" />
 
 
 
@@ -571,9 +571,11 @@ The back leg broke twice during prototyping. Because the cardboard is too weak, 
 <img width="3024" height="4032" alt="IMG_8833" src="https://github.com/user-attachments/assets/16e1011d-75f7-4007-8c88-36c5ecddf0c1" />
 
 Bottom view of the box with two legs. 
+
 <img width="4032" height="3024" alt="IMG_8832" src="https://github.com/user-attachments/assets/257db082-3b4e-4994-b1af-8c48377a2efd" />
 
 Distance sensor being taped at the front. 
+
 <img width="4032" height="3024" alt="IMG_8834" src="https://github.com/user-attachments/assets/5332963a-c395-45a6-821c-fb01a44b41bb" />
 
 After everything is done, the bot can finally move as expected. Then, I added nosepads, as the one on glasses, on the front legs to add more friction. I trimmed the sides of the back leg for less contact surface area, which in turns reduces friction. I've also added smooth plastics on the tip of the back leg to further decrease the friction. All those changes are to reduce the resistance. In other words, for the bot to more in a more powerful way. 
@@ -609,7 +611,7 @@ https://drive.google.com/file/d/1Hxyn-Zins9fGDWAwAr1LJmw8FdlNuvOU/view?usp=shari
 
 - A simple interaction diagram or sketch showing how sensing and actuation are connected
 
-<!-- Add / link diagram here -->
+<img width="1322" height="1903" alt="IMG_0869" src="https://github.com/user-attachments/assets/e6c06209-816e-4ff3-ae38-4d926104b330" />
 
 
 - Written reflection: What did you learn about connecting sensing, movement, and physical form? What was fun, surprising, or challenging?
