@@ -6,6 +6,7 @@ Part B: find people in the webcam feed in real time with YOLO.
     python yolo_person.py --imgsz 640     # look at a bigger frame: more accurate, slower
     python yolo_person.py --all           # all 80 COCO classes, not just people
     python yolo_person.py --headless      # no window, so it works over plain ssh
+    python yolo_person.py --web           # no window; watch the boxes in a browser at http://<pi>:8000
 
 Press q in the window to quit (Ctrl-C when headless).
 """
@@ -19,7 +20,13 @@ parser.add_argument("--conf", type=float, default=0.4, help="minimum confidence,
 parser.add_argument("--imgsz", type=int, default=320, help="frame size the model looks at")
 parser.add_argument("--all", action="store_true", help="detect all 80 classes, not just people")
 parser.add_argument("--headless", action="store_true", help="do not open a window")
+parser.add_argument("--web", action="store_true", help="no window; stream the boxes to a browser on port 8000")
 args = parser.parse_args()
+
+if args.web:
+    from web_preview import WebPreview
+    preview = WebPreview(8000)
+    print("open", preview.start(), "in a browser", flush=True)
 
 model = YOLO("yolo26n_ncnn_model")          # exported once in Part A
 cap = cv2.VideoCapture(0)
@@ -39,7 +46,9 @@ try:
             print(f"{model.names[int(cls)]} at x={int((x1 + x2) / 2)}, "
                   f"height={int(y2 - y1)} px, conf={conf:.2f}", end=" | ")
         print(f"{len(r.boxes)} object(s)", flush=True)
-        if not args.headless:
+        if args.web:
+            preview.update(r.plot())
+        elif not args.headless:
             cv2.imshow("YOLO", r.plot())
             if cv2.waitKey(1) == ord("q"):
                 break

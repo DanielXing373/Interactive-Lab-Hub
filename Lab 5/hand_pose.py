@@ -5,8 +5,13 @@ import HandTrackingModule as htm
 import math
 from ctypes import cast, POINTER
 import subprocess
+import sys
 
-import subprocess
+WEB = "--web" in sys.argv  # no window; watch in a browser at http://<pi>:8000, Ctrl-C to quit
+if WEB:
+    from web_preview import WebPreview
+    preview = WebPreview(8000)
+    print("open", preview.start(), "in a browser", flush=True)
 
 def set_volume(percent):
     subprocess.run(
@@ -111,6 +116,9 @@ while True:
     cv2.putText(img, f'FPS: {int(fps)}', (40, 50), cv2.FONT_HERSHEY_COMPLEX,
                 1, (255, 0, 0), 3)
 
+    if WEB:
+        preview.update(img)
+        continue
     cv2.imshow("Img", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
         audio_process.terminate()  #
