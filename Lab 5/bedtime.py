@@ -29,7 +29,7 @@ import sys
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
-INTRO_SECONDS = 8
+INTRO = "bedtime_bgm.wav"  # about 7 s, played once in full
 RATE = 16000
 VOICE = "en_US-lessac-medium"  # Piper neural voice, as in Lab 3
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -68,7 +68,7 @@ if voices:
     tts.wait()
 else:
     print(f"no Piper voice {VOICE} in voices/ (see the top of this file), skipping the spoken reply", flush=True)
-subprocess.run(["aplay", "-q", "-D", "pulse", "-d", str(INTRO_SECONDS), "Peaceful_Mind.wav"])
+subprocess.run(["aplay", "-q", "-D", "pulse", INTRO])
 
 # The real run: the same night.sh as a manual start. Its console output and the files it writes are the report.
 os.execvp("bash", ["bash", "night.sh"])
