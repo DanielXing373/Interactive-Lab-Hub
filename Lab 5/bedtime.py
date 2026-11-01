@@ -25,13 +25,16 @@ import pathlib
 import re
 import subprocess
 import sys
+import wave
 
+import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
 INTRO = "bedtime_bgm.wav"  # about 7 s, played once in full
 RATE = 16000
 VOICE = "en_US-lessac-medium"  # Piper neural voice, as in Lab 3
+PIPER_RATE = 22050             # sample rate of that voice's raw output
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 parser = argparse.ArgumentParser()
@@ -40,6 +43,31 @@ parser.add_argument("--seconds", type=float, default=4, help="length of each lis
 parser.add_argument("--model", default="base.en", help="faster-whisper model (base.en: tiny.en misses short phrases)")
 args = parser.parse_args()
 words = [w.strip().lower() for w in args.words.split(",") if w.strip()]
+
+def load_wav(path):
+    with wave.open(str(path)) as w:
+        frames = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+        return w.getframerate(), frames.reshape(-1, w.getnchannels())
+
+
+# Reply and music are prepared before listening, so they play back to back the moment the words are heard.
+bgm_rate, bgm = load_wav(INTRO)
+voices = next((d for d in (pathlib.Path("voices"), pathlib.Path("../Lab 3/voices"))
+               if (d / f"{VOICE}.onnx").exists()), None)
+if voices:
+    print("preparing the spoken reply...", flush=True)
+    raw = subprocess.run([sys.executable, "-m", "piper", "--model", VOICE, "--data-dir", str(voices),
+                          "--output-raw", "--", "Good night. I will watch the waterhole for you."],
+                         capture_output=True).stdout
+    speech = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+    n = int(len(speech) * bgm_rate / PIPER_RATE)
+    speech = np.interp(np.linspace(0, len(speech) - 1, n), np.arange(len(speech)), speech).astype(np.int16)
+    reply = np.repeat(speech[:, None], bgm.shape[1], axis=1)
+else:
+    print(f"no Piper voice {VOICE} in voices/ (see the top of this file), skipping the spoken reply", flush=True)
+    reply = np.zeros((0, bgm.shape[1]), dtype=np.int16)
+pause = np.zeros((int(0.3 * bgm_rate), bgm.shape[1]), dtype=np.int16)
+goodnight = np.concatenate([reply, pause, bgm])
 
 print("loading speech model...", flush=True)
 model = WhisperModel(args.model, device="cpu", compute_type="int8")
@@ -58,17 +86,8 @@ while True:
 print("good night! playing the intro, then the night begins", flush=True)
 subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "50%"],
                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-voices = next((d for d in (pathlib.Path("voices"), pathlib.Path("../Lab 3/voices"))
-               if (d / f"{VOICE}.onnx").exists()), None)
-if voices:
-    tts = subprocess.Popen([sys.executable, "-m", "piper", "--model", VOICE, "--data-dir", str(voices),
-                            "--output-raw", "--", "Good night. I will watch the waterhole for you."],
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    subprocess.run(["aplay", "-q", "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"], stdin=tts.stdout)
-    tts.wait()
-else:
-    print(f"no Piper voice {VOICE} in voices/ (see the top of this file), skipping the spoken reply", flush=True)
-subprocess.run(["aplay", "-q", "-D", "pulse", INTRO])
+sd.play(goodnight, bgm_rate)
+sd.wait()
 
 # The real run: the same night.sh as a manual start. Its console output and the files it writes are the report.
 os.execvp("bash", ["bash", "night.sh"])
