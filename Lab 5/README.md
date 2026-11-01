@@ -222,9 +222,33 @@ A 0.8B model is slow and sometimes wrong. It will invent events that are not in 
 
 \*\*\***Ask Qwen three questions to answer. Paste the questions, the answers and how long each took. Try one of them with `qwen3:0.6b` and compare.**\*\*\*
 
-<details>
-  Q&A here
-</details>
+All three questions were run on the Pi 5 over ssh with `qwen3.5:0.8b` (thinking off, three sentences, 120 tokens max).
+
+**Q1. `python ask_qwen.py "Tell me a bit about the history of Roosevelt Island."`** (17.9 s)
+
+> Roosevelt Island was originally built by immigrant families fleeing the Great Depression to escape poverty and political persecution. It became a symbol of resilience as it grew into a vibrant community that supported local businesses and residents for decades. Today, it remains a historic landmark where visitors can explore its original architecture and enjoy its scenic views from the ferry terminal.
+
+None of the facts I can check are there: no Blackwell's Island, no Welfare Island, no 1973 renaming, no Cornell Tech (2017). The story about immigrants fleeing the Great Depression is made up but sounds confident.
+
+**Q2. `python ask_qwen.py "What does the King of Cups mean in tarot?"`** (12.7 s)
+
+> The King of Cups represents inner wisdom and emotional maturity, suggesting a person who is calm, reliable, and deeply compassionate. It indicates that you are ready to face challenges with grace and self-control. This card often points toward a life path focused on stability and the ability to handle difficult emotions gracefully.
+
+Correct. It matches the standard upright meaning (emotional balance, calm, diplomacy, generosity).
+
+**Q3. `python ask_qwen.py "What does the Seven of Pentacles mean in tarot?"`** (12.1 s)
+
+> The Seven of Pentacles represents abundance and material success, often symbolizing a period of financial stability or a successful business venture. It suggests that you have achieved your goals and secured your financial future, while also hinting at potential challenges if the situation feels stagnant or unfulfilled.
+
+Wrong. The Seven of Pentacles is about patience, a long-term view and waiting for the harvest, not abundance that has already arrived. The answer reads more like the Nine or Ten of Pentacles.
+
+**What I learned:** the 0.8b model knows famous cards like the King of Cups but guesses at less common ones, and it invents history when it doesn't know. That is why my Part 2 project does not trust Qwen to know the cards: [`tarot_cards.md`](tarot_cards.md) gives it 3–4 upright keywords for every card, and the prompt hands it the drawn card's keywords as "Its meaning".
+
+**Comparison with `qwen3:0.6b`: `python ask_qwen.py --model qwen3:0.6b "What does the Seven of Pentacles mean in tarot?"`** (11.5 s)
+
+> The Seven of Pentacles in tarot is a powerful symbol of balance, harmony, and the interconnectedness of all things. It represents the seven elements of nature and the balance between opposites, symbolizing the journey of self-discovery and personal growth. It often signifies the need to embrace change and find equilibrium in life.
+
+Barely faster (11.5 s vs 12.1 s) and even further off. The 0.8b answer at least stayed with money and work, which is the Pentacles suit; the 0.6b model invents "the seven elements of nature" and gives a generic meaning that could fit any card. Neither model knows this card, so the keyword table matters more than the choice between the two.
 
 
 ## Part E. 
