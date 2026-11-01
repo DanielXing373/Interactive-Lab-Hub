@@ -9,3 +9,4 @@ adafruit-circuitpython-rgb-display
 lgpio
 faster-whisper
 sounddevice
+piper-tts
