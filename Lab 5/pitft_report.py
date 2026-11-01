@@ -83,16 +83,34 @@ def stats_page():
     return img
 
 
+def draw_steps():
+    """How the card was drawn, rebuilt from the report's counts (same rule as tarot.py)."""
+    winner = report["winner"]
+    if winner:
+        v = report["animals"][winner]
+        rank = report["card"].split(" of ")[0]
+        return [f"most: {winner} ({v['count']})",
+                f"{winner} \u2192 {v['suit']}",
+                f"{v['count']} mod 14 = {v['count'] % 14}",
+                f"{v['count'] % 14} \u2192 {rank}"]
+    quiet = all(v["count"] == 0 for v in report["animals"].values())
+    return ["quiet night" if quiet else "a tie", "\u2192 Major Arcana", "picked by the date"]
+
+
 def card_page():
     img, d = blank()
     card = Image.open(HERE / report["image"]).convert("RGB")
-    card.thumbnail((W // 2, H - 6))                 # the card stands on the left, its name on the right
+    card.thumbnail((W // 2, H - 6))                 # the card stands on the left, the math on the right
     img.paste(card, (6, 3))
     x = card.width + 14
-    y = H // 2 - 16
-    for line in wrap(report["card"], font(14, True), W - x - 4):
-        d.text((x, y), line, font=font(14, True), fill=GOLD)
-        y += 18
+    y = 8
+    for line in draw_steps():
+        d.text((x, y), line, font=font(11), fill=WHITE)
+        y += 16
+    y += 6
+    for line in wrap(report["card"], font(13, True), W - x - 4):
+        d.text((x, y), line, font=font(13, True), fill=GOLD)
+        y += 17
     return img
 
 
