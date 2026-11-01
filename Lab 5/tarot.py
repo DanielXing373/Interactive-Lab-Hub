@@ -12,7 +12,7 @@ The draw:
     over every look of the night. The animal with the highest count picks the suit, and its count
     mod 14 picks the card: 0 Ace, 1 Two, ... 9 Ten, 10 Page, 11 Knight, 12 Queen, 13 King.
     A night with none of the four animals, or a tie for first place, draws one of the 22 Major Arcana
-    instead. That draw is seeded by the night's numbers, so the same log always gives the same card.
+    instead, picked at random with the night's date as the seed.
 
 Prints the night, the card and the reading, and saves everything for the display to
 reports/<log name>_tarot.json. Card keywords come from tarot_cards.md, images from tarot/.
@@ -47,7 +47,6 @@ parser.add_argument("--context", default="a waterhole in Amboseli, Kenya, below 
 parser.add_argument("--sentences", type=int, default=4, help="length of the reading")
 parser.add_argument("--lang", default="English")
 parser.add_argument("--no-keywords", action="store_true", help="do not give Qwen the card's keywords")
-parser.add_argument("--seed", type=int, help="override the seed of a Major Arcana draw")
 parser.add_argument("--model", default="qwen3.5:0.8b")
 parser.add_argument("--max-tokens", type=int, default=300)
 parser.add_argument("--temperature", type=float, default=0.5)
@@ -86,8 +85,7 @@ for animal in suits:
 ranked = sorted(night, key=lambda a: -night[a]["count"])
 top, second = night[ranked[0]]["count"], night[ranked[1]]["count"]
 if top == 0 or top == second:
-    seed = args.seed if args.seed is not None else sum(v["count"] for v in night.values()) * 1000 + len(looks)
-    card = random.Random(seed).choice(majors)
+    card = random.Random(int(first[:10].replace("-", ""))).choice(majors)
     if top == 0:
         why = "None of the four animals came, so the night itself drew a card from the Major Arcana."
     else:
