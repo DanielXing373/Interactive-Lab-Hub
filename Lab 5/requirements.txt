@@ -7,3 +7,5 @@ yt-dlp
 Adafruit-Blinka
 adafruit-circuitpython-rgb-display
 lgpio
+faster-whisper
+sounddevice

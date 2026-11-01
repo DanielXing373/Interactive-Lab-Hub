@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Night Oracle - how the card was drawn</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; }
+  canvas { display: block; margin: auto; position: absolute; inset: 0; }
+  #hint { position: fixed; bottom: 8px; right: 12px; color: #445; font: 12px sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<div id="hint">R replay · Space pause · H hide this</div>
+<script>
+// Numbers are the real ones from reports/20261031_A_tarot.json (Amboseli, night of Oct 31).
+const REPORT = {
+  place: "AMBOSELI, KENYA", times: "21:54 \u2013 06:45", looks: 1183,
+  animals: [
+    { name: "elephant", suit: "Pentacles", count: 33 },
+    { name: "giraffe",  suit: "Wands",     count: 0 },
+    { name: "zebra",    suit: "Swords",    count: 0 },
+    { name: "bird",     suit: "Cups",      count: 209 },
+  ],
+  winner: "bird", card: "King of Cups", image: "tarot/king_of_cups.jpg",
+};
+const RANKS = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Page", "Knight", "Queen", "King"];
+
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const GOLD = "#ffd666", WHITE = "#ecebe6", GREY = "#7d8190", BG = "#05070d";
+const win = REPORT.animals.find(a => a.name === REPORT.winner);
+const rest = win.count % 14;
+
+const cardImg = new Image();
+let cardOk = false;
+cardImg.onload = () => (cardOk = true);
+cardImg.src = REPORT.image;          // works when this file sits in Lab 5 next to tarot/; otherwise a drawn card
+
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  cv.style.width = W * s + "px"; cv.style.height = H * s + "px";
+}
+addEventListener("resize", fit); fit();
+
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = t => (t = clamp(t), t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const out = t => 1 - Math.pow(1 - clamp(t), 3);
+const span = (t, a, b) => clamp((t - a) / (b - a));
+
+const stars = Array.from({ length: 220 }, () => ({
+  x: Math.random() * W, y: Math.random() * H * 0.9, r: Math.random() * 1.6 + 0.3, p: Math.random() * 6.28,
+}));
+
+function text(str, x, y, size, color, align = "left", weight = 400, alpha = 1, spacing = 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+  ctx.font = `${weight} ${size}px "Segoe UI", "Helvetica Neue", Arial, sans-serif`;
+  if (spacing) ctx.letterSpacing = spacing + "px";
+  ctx.fillText(str, x, y);
+  ctx.restore();
+}
+
+function background(t) {
+  const g = ctx.createRadialGradient(W / 2, H * 1.1, 100, W / 2, H * 0.6, H * 1.2);
+  g.addColorStop(0, "#1a1f33"); g.addColorStop(1, BG);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 1.3 + s.p);
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Kilimanjaro silhouette
+  ctx.fillStyle = "#0b0e18";
+  ctx.beginPath(); ctx.moveTo(0, H);
+  ctx.lineTo(0, H - 90); ctx.lineTo(520, H - 150); ctx.lineTo(860, H - 300); ctx.lineTo(960, H - 320);
+  ctx.lineTo(1080, H - 290); ctx.lineTo(1400, H - 160); ctx.lineTo(W, H - 110); ctx.lineTo(W, H); ctx.fill();
+  ctx.fillStyle = "rgba(236,235,230,0.10)";
+  ctx.beginPath(); ctx.moveTo(860, H - 300); ctx.lineTo(960, H - 320); ctx.lineTo(1080, H - 290);
+  ctx.lineTo(1020, H - 270); ctx.lineTo(960, H - 285); ctx.lineTo(905, H - 272); ctx.fill();
+}
+
+// Scene 1 (0-5.5 s): the night's counts, bird wins.
+function scene1(t, fade) {
+  const a = out(span(t, 0.2, 1.2)) * fade;
+  text("LAST NIGHT", 160, 150, 34, GOLD, "left", 700, a, 8);
+  text(`${REPORT.place}  \u00b7  ${REPORT.times}  \u00b7  ${REPORT.looks} looks`, 160, 200, 26, GREY, "left", 400, a, 2);
+  const max = Math.max(...REPORT.animals.map(v => v.count));
+  const win = span(t, 4.0, 5.0);
+  REPORT.animals.forEach((v, i) => {
+    const k = out(span(t, 0.9 + i * 0.35, 1.9 + i * 0.35));
+    const y = 330 + i * 140, x0 = 160 + (1 - k) * -120;
+    const isWin = v.name === REPORT.winner;
+    const dim = isWin ? 1 : 1 - 0.65 * win;
+    const alpha = k * dim * fade;
+    const grow = ease(span(t, 1.4 + i * 0.35, 3.4 + i * 0.25));
+    const barW = 1100 * (v.count / max) * grow;
+    text(v.name, x0, y, 46, isWin && win > 0 ? GOLD : WHITE, "left", 600, alpha);
+    text(v.suit, x0, y + 42, 24, GREY, "left", 400, alpha, 3);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.fillRect(480, y - 18, 1100, 36);
+    if (isWin && win > 0) { ctx.shadowColor = GOLD; ctx.shadowBlur = 40 * win; }
+    ctx.fillStyle = isWin ? GOLD : "#8fa3c8"; ctx.fillRect(480, y - 18, Math.max(barW, v.count ? 4 : 0), 36);
+    ctx.restore();
+    text(String(Math.round(v.count * grow)), 1640, y, 52, isWin && win > 0 ? GOLD : WHITE, "left", 700, alpha);
+  });
+  text("the bird came most", 160, 920, 36, GOLD, "left", 600, out(span(t, 4.6, 5.3)) * fade, 2);
+}
+
+// Scene 2 (5.5-10.5 s): bird -> Cups, 209 mod 14 = 13, the pointer walks to the King.
+function scene2(t, fade) {
+  const a = out(span(t, 5.6, 6.4)) * fade;
+  text(`${win.name}  \u2192  ${win.suit}`, W / 2, 230, 72, GOLD, "center", 700, a, 4);
+  const b = out(span(t, 6.6, 7.4)) * fade;
+  text(`${win.count} mod 14 = ${rest}`, W / 2, 400, 96, WHITE, "center", 300, b, 2);
+  const tileW = 112, gap = 12, x0 = W / 2 - (14 * tileW + 13 * gap) / 2, y = 640;
+  const walk = ease(span(t, 7.8, 9.6)) * rest;
+  RANKS.forEach((r, i) => {
+    const k = out(span(t, 7.2 + i * 0.03, 7.7 + i * 0.03)) * fade;
+    const x = x0 + i * (tileW + gap);
+    const lit = i === rest && t > 9.6;
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.strokeStyle = lit ? GOLD : "rgba(255,255,255,0.25)"; ctx.lineWidth = lit ? 4 : 2;
+    if (lit) { ctx.shadowColor = GOLD; ctx.shadowBlur = 30; }
+    ctx.strokeRect(x, y - 60, tileW, 120);
+    ctx.restore();
+    text(String(i), x + tileW / 2, y - 25, 26, GREY, "center", 400, k);
+    text(r, x + tileW / 2, y + 20, r.length > 4 ? 24 : 30, lit ? GOLD : WHITE, "center", 600, k);
+  });
+  const px = x0 + walk * (tileW + gap) + tileW / 2;
+  const pa = out(span(t, 7.8, 8.1)) * fade;
+  ctx.save(); ctx.globalAlpha = pa; ctx.fillStyle = GOLD;
+  ctx.beginPath(); ctx.moveTo(px, y - 82); ctx.lineTo(px - 18, y - 112); ctx.lineTo(px + 18, y - 112); ctx.fill();
+  ctx.restore();
+  text(String(Math.round(walk)), px, y - 140, 34, GOLD, "center", 700, pa);
+}
+
+// Scene 3 (10.5 s on): the card.
+function scene3(t) {
+  const k = ease(span(t, 10.6, 12.0));
+  const cw = 380, ch = 650, cx = W / 2, cy = H / 2 - 30;
+  const flip = Math.cos((1 - k) * Math.PI / 2);
+  ctx.save();
+  ctx.translate(cx, cy + (1 - k) * 80);
+  ctx.scale(Math.max(flip, 0.02), 1);
+  ctx.globalAlpha = k;
+  ctx.shadowColor = GOLD; ctx.shadowBlur = 60 * k;
+  if (cardOk) ctx.drawImage(cardImg, -cw / 2, -ch / 2, cw, ch);
+  else {
+    ctx.fillStyle = "#1b2238"; ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+    ctx.shadowBlur = 0; ctx.strokeStyle = GOLD; ctx.lineWidth = 6; ctx.strokeRect(-cw / 2 + 16, -ch / 2 + 16, cw - 32, ch - 32);
+    text("\u2615", 0, -40, 160, GOLD, "center");
+    text("XIII \u00b7 CUPS", 0, 160, 30, GREY, "center", 600, 1, 4);
+  }
+  ctx.restore();
+  const a = out(span(t, 12.0, 12.8));
+  text(REPORT.card.toUpperCase(), W / 2, cy + ch / 2 + 70, 64, GOLD, "center", 700, a, 10);
+  text(`${win.count} birds  \u00b7  ${win.count} mod 14 = ${rest}  \u00b7  ${RANKS[rest]} of ${win.suit}`,
+       W / 2, cy + ch / 2 + 130, 26, GREY, "center", 400, out(span(t, 12.6, 13.4)), 2);
+}
+
+let start = performance.now(), paused = false, pausedAt = 0;
+function frame(now) {
+  const t = paused ? pausedAt : (now - start) / 1000;
+  background(t);
+  if (t < 6.0) scene1(t, 1 - span(t, 5.2, 5.9));
+  if (t > 5.4 && t < 11.0) scene2(t, 1 - span(t, 10.2, 10.9));
+  if (t > 10.4) scene3(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown", e => {
+  if (e.key === "r" || e.key === "R") { start = performance.now(); paused = false; }
+  if (e.key === " ") {
+    if (paused) { start = performance.now() - pausedAt * 1000; paused = false; }
+    else { pausedAt = (performance.now() - start) / 1000; paused = true; }
+  }
+  if (e.key === "h" || e.key === "H") document.getElementById("hint").style.display = "none";
+});
+</script>
+</body>
+</html>
