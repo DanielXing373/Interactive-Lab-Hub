@@ -4,3 +4,6 @@ ultralytics
 ncnn
 requests
 yt-dlp
+Adafruit-Blinka
+adafruit-circuitpython-rgb-display
+lgpio

@@ -34,3 +34,6 @@ echo "== morning"
 vcgencmd measure_temp
 python tarot.py "logs/${night}_A.jsonl" --context "$A_CONTEXT" --question "$QUESTION"
 python tarot.py "logs/${night}_B.jsonl" --context "$B_CONTEXT" --question "$QUESTION"
+
+# Demo presentation: the A report on the Mini PiTFT. The console output and JSON above are the real report.
+python pitft_report.py "reports/${night}_A_tarot.json"

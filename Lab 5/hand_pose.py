@@ -7,7 +7,7 @@ from ctypes import cast, POINTER
 import subprocess
 import sys
 
-WEB = "--web" in sys.argv  # no window; watch in a browser at http://<pi>:8000, Ctrl-C to quit
+WEB = "--web" in sys.argv  # demo-only screen display: no window, watch in a browser at http://<pi>:8000, Ctrl-C to quit
 if WEB:
     from web_preview import WebPreview
     preview = WebPreview(8000)

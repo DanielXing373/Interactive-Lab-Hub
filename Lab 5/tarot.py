@@ -140,6 +140,7 @@ r.raise_for_status()
 result["reading"] = r.json()["response"].strip()
 result["seconds"] = round(time.time() - t0, 1)
 
+# The real report: printed to the console below and saved as JSON, both straight from the log and Qwen's reply.
 out = HERE / "reports" / f"{pathlib.Path(args.log).stem}_tarot.json"
 out.parent.mkdir(exist_ok=True)
 out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
