@@ -1,6 +1,6 @@
 # Observant Systems: Overnight Sensation
 
-**Team:**
+**Team:** Solo
 
 **Members:** Daniel Xing
 
@@ -33,6 +33,16 @@ This lab will help you think through the design of observant systems, particular
 
 **Please indicate anyone that helped with this Lab here.**
 Be generous in acknowledging their contributions! And also recognizing any other influences (e.g. from YouTube, Github, Twitter) that informed your design. 
+
+Cursor helped me with coding, exploring YouTube channels, uploading pictures. 
+
+YouTube links I've used:
+
+https://www.youtube.com/@Africamvideos
+
+https://www.youtube.com/@nwr-namibia
+
+
 
 <details>
 	<summary><strong>Lab instructions (click to expand)</strong></summary>
