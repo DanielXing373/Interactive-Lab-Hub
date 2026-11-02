@@ -188,6 +188,8 @@ https://drive.google.com/file/d/1PAiEB5i3rr1g7PY7tbOk5MDUTWDYEplI/view?usp=drive
 
 It always sees me, but always recognize faces in the phone. I think it is looking for the contour of human-like objects, and in a 2D plane, a picture and a real human has no differences. 
 
+As I move out of the image, even a slight part of me, like part of my arm, will still be considered as a human. I doubt if that is accurate, but I guess it is reasoning on the previous pictures. 
+
 
 
 ## Part C. 
@@ -420,7 +422,11 @@ Fake a night first: run it for thirty seconds while you walk around, stop it, an
 
 \*\*\***Screenshots or videos of the running system.**\*\*\*
 
-The Pi runs silently without a physical camera. It reads several YouTube livestreams around 1 per 30 seconds, and take screenshots when it detects an animal. Also, if the temperature is too high, it stops, but that hasn't happen yet. 
+<img width="854" height="480" alt="20261101-004938_00351" src="https://github.com/user-attachments/assets/f14d2560-a5de-43f2-9b0d-9dad009c142e" />
+
+The Pi runs silently without a physical camera. It reads several YouTube livestreams around 1 per 30 seconds, and take screenshots when it detects an animal. 
+
+Also, if the temperature is too high, it stops, but that hasn't happen yet. 
 
 ## Part I. 
 ### Design the interaction after
@@ -459,11 +465,17 @@ https://drive.google.com/file/d/1akDl9j7-dSQAflvQndOKa5yTZAHC_1aj/view?usp=shari
 
 The set up is very easy. It has a speaker and a microphone. It is placed next to the window for a slightly better cooling.
 When the user is asleep, it starts watching YouTube livestreams about a water pond in Africa. It then identifies the occurrences of each animal, and also take screenshots when an animal appears. It automatically stops at 6:45.
+
 After that, Qwen takes over, by counting the occurrences. I expect 4 animals to appear the most frequently: birds, elephants, zebras, and giraffes. They correspond to cups, pentacles, swords, and wands in a Tarot deck. The one that appears the most determines the kind (it is apparently very unfair to count it this way, but you got the idea). Then, by doing (mod 14) to the number, we can determine the exact card. For example, if birds appear 209 times, it is the 14th card of the cups, which is the King of Cups. If there is a tie or it is just a peaceful night where no animal showed up, we will draw a random Major Arcaner Card. 
+
 After picking the card, Qwen then will explain what the card means in the context of everyday fortune. Based on testing, it only works fine with the popular cards, like Ten of Swords. So i gave it 3-4 key words for those cards, along with images, so that it can reason better on the card.
+
 After the user wakes up, they will be able to see a 3-page-report. 
+
 The first page is a sumarry with statistics.
+
 The second page is the card drawn with steps of calculation.
+
 The last pages is the explanation and suggestion on how to spend the day. 
 
 The whole idea is all mine. AI helped uploading pictures, coding, and recommending YouTube channels. 
