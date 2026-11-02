@@ -1,0 +1,46 @@
+{
+  "log": "logs/20261031_B.jsonl",
+  "context": "the Okaukuejo waterhole in Etosha, Namibia",
+  "from": "2026-10-31T21:54:25-04:00",
+  "to": "2026-11-01T06:45:24-05:00",
+  "looks": 1183,
+  "animals": {
+    "elephant": {
+      "suit": "Pentacles",
+      "count": 163,
+      "looks": 22,
+      "most_at_once": 13,
+      "first_seen": "01:56"
+    },
+    "giraffe": {
+      "suit": "Wands",
+      "count": 4,
+      "looks": 4,
+      "most_at_once": 1,
+      "first_seen": "01:34"
+    },
+    "zebra": {
+      "suit": "Swords",
+      "count": 0,
+      "looks": 0,
+      "most_at_once": 0,
+      "first_seen": null
+    },
+    "bird": {
+      "suit": "Cups",
+      "count": 774,
+      "looks": 768,
+      "most_at_once": 3,
+      "first_seen": "23:34"
+    }
+  },
+  "winner": "bird",
+  "card": "Five of Cups",
+  "keywords": "loss, regret, disappointment, grief",
+  "image": "tarot/five_of_cups.jpg",
+  "why": "The bird came most (774 in total), which picks the suit of Cups; 774 mod 14 = 4, which is the Five.",
+  "question": "What does today hold for me?",
+  "model": "qwen3.5:0.8b",
+  "reading": "Today is filled with regret and loss, as the Five of Cups tells you to accept whatever hurts rather than fighting against it. The animal drawn was a bird that drew this card last night, bringing feelings of disappointment into your life today. Your heart feels empty because you have lost something valuable over the past few days. Please remember to forgive yourself for the mistakes and let go of those painful memories gently.",
+  "seconds": 19.2
+}

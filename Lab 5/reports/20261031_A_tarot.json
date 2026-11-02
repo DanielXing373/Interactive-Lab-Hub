@@ -1,0 +1,46 @@
+{
+  "log": "logs/20261031_A.jsonl",
+  "context": "a waterhole in Amboseli, Kenya, below Mount Kilimanjaro",
+  "from": "2026-10-31T21:54:11-04:00",
+  "to": "2026-11-01T06:45:08-05:00",
+  "looks": 1183,
+  "animals": {
+    "elephant": {
+      "suit": "Pentacles",
+      "count": 33,
+      "looks": 17,
+      "most_at_once": 5,
+      "first_seen": "01:51"
+    },
+    "giraffe": {
+      "suit": "Wands",
+      "count": 0,
+      "looks": 0,
+      "most_at_once": 0,
+      "first_seen": null
+    },
+    "zebra": {
+      "suit": "Swords",
+      "count": 0,
+      "looks": 0,
+      "most_at_once": 0,
+      "first_seen": null
+    },
+    "bird": {
+      "suit": "Cups",
+      "count": 209,
+      "looks": 157,
+      "most_at_once": 7,
+      "first_seen": "23:44"
+    }
+  },
+  "winner": "bird",
+  "card": "King of Cups",
+  "keywords": "emotional balance, calm, diplomacy, generosity",
+  "image": "tarot/king_of_cups.jpg",
+  "why": "The bird came most (209 in total), which picks the suit of Cups; 209 mod 14 = 13, which is the King.",
+  "question": "What does today hold for me?",
+  "model": "qwen3.5:0.8b",
+  "reading": "Today brings emotional balance, calm, and diplomacy as you navigate your day with the King of Cups. The gentle bird drawn last night has picked the spirit of cups, offering you a place to rest and find peace within yourself. It reminds you that even when things feel heavy or difficult, there is always grace and kindness to offer.",
+  "seconds": 20.3
+}
