@@ -2,9 +2,9 @@
 
 **Team:**
 
-**Members:** Full Name (netid, github-handle), ...
+**Members:** Daniel Xing
 
-**Project name:**
+**Project name:** Fortune Teller From Kilimanjaro
 
 <details>
 	<summary><strong>Instructions for Students (Click to Expand)</strong></summary>
@@ -136,6 +136,9 @@ pi@raspberrypi:~ $ ollama list
 
 \*\*\***Include a screenshot of `ollama list` showing your models.**\*\*\*
 
+<img width="742" height="122" alt="image" src="https://github.com/user-attachments/assets/3569de23-3566-4eae-94bb-ab91256ee94a" />
+
+
 
 ## Part B. 
 ### See: recognize people in real time with YOLO
@@ -160,6 +163,10 @@ Then press q to quit and run it again with a flag. Each one changes a single thi
 ```
 
 \*\*\***Include a short video or screenshots of your experiments with the person detection. Write down three situations where it did not see you, or saw a person who was not there, and what you think the cause was.**\*\*\*
+
+https://drive.google.com/file/d/1PAiEB5i3rr1g7PY7tbOk5MDUTWDYEplI/view?usp=drive_link
+
+It always sees me, but always recognize faces in the phone. I think it is looking for the contour of human-like objects, and in a 2D plane, a picture and a real human has no differences. 
 
 
 
@@ -188,7 +195,9 @@ Try the two main features of this script: 1) pinching for percentage control (th
 Consider how you might use this position based approach to create an interaction, and write how you might use it on either face, hand or body pose tracking.
 
 \*\*\***Include a screenshot or short video of the hand pose demo, and write how you might use face, hand or body pose tracking in your observant system.**\*\*\*
+https://drive.google.com/file/d/15DKjcScUoQl7w6LxqQvEBNZEtjll3u6s/view?usp=drive_link
 
+I can use the detector for starting or ending the system. 
 
 ## Part D. 
 ### Reason: run Qwen on the Pi with Ollama
@@ -311,15 +320,27 @@ Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/25
 
 \*\*\***Insert ideas, sketches, Verplank diagrams and storyboards for your night-time interaction here.**\*\*\*
 
+The idea uses time zones around the globe. When we are sleeping in nyc, other places are having their day time. I came up with several ideas and picked several cameras and live streams around the world. I also tried to use the camera back in my home to observe my pets. Based on several trials, I ended up having the one below:
+
+<img width="742" height="122" alt="image" src="https://github.com/user-attachments/assets/1a12949b-edc2-498e-8ec6-f0b86a2d8c22" />
+
+By counting the occurrences of animals in Africa around a water pond, YOLO produces logs that will be turned into a Tarot reading eventually. 
+
+The system will be activated with gesture, and will automatically end at around 6:45, leaving Qwen 15 minutes to reason, which should be way more than enough. 
+
 ## Prep for Part 2
 
 1. Look at and give feedback on the Part F storyboards.
    **Put the feedback for your ideas here.**
-2. [Update your Lab Hub](prep.md#get-the-latest-content) to get the latest content for Part 2.
-3. Decide where the device will spend the night and who else lives there. Get their OK before the first run.
-4. Revise your storyboard with the feedback and with what you learned in Part E about where the pipeline breaks.
+3. [Update your Lab Hub](prep.md#get-the-latest-content) to get the latest content for Part 2.
+4. Decide where the device will spend the night and who else lives there. Get their OK before the first run.
+5. Revise your storyboard with the feedback and with what you learned in Part E about where the pipeline breaks.
 
 \*\*\***Post your revised storyboard here.**\*\*\*
+
+It is basically the same, with voice activation instead of gesture activation. 
+It might be better to voice instead of gesture. People might not be able to make clear gestures, with good lighting environment, right before they go to sleep.
+Also, it is harder to debug the camera. We need to at least pull out the image for debugging. Therefore, I changed it to voice-activation. Along with some minor changes in formatting.
 
 ## Part G. 
 ### Design the interaction before
@@ -327,6 +348,8 @@ Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/25
 The hand-off: the person tells the device what to watch tonight, and the device acknowledges it. Keep it to a thirty-second ritual. A button or a touch (Lab 4), a spoken sentence (Lab 3), a wave or a Quiet Coyote at the camera (Part C). The acknowledgement can be a line on the display, a tone, or an LED that dims rather than lights up. At its simplest, the hand-off just sets the question that the morning will answer.
 
 \*\*\***Describe the interaction before.**\*\*\*
+
+The user will tell the Pi that he or she is going to sleep. The question remains the same everyday, which is to draw a Tarot card for tomorrow's general fortune. The Pi answers with good night, with a 4-seconds sound to show that the script has been activated. 
 
 ## Part H. 
 ### Incorporate the observant system
@@ -341,6 +364,8 @@ The Part E pipeline becomes the night shift. `overnight.py` runs your `interpret
 Fake a night first: run it for thirty seconds while you walk around, stop it, and run `morning.py` from Part I. When that looks right, run a real night. If your storyboard needs a sensor rather than the camera, swap in the Lab 4 example code and log its reading the same way.
 
 \*\*\***Screenshots or videos of the running system.**\*\*\*
+
+The Pi runs silently without a physical camera. It reads several YouTube livestreams around 1 per 30 seconds, and take screenshots when it detects an animal. Also, if the temperature is too high, it stops, but that hasn't happen yet. 
 
 ## Part I. 
 ### Design the interaction after
@@ -362,6 +387,21 @@ Document all the prototypes and iterations you have designed and worked on. The 
 * "Acts like": how a person hands the night over and what they get back.
 
 \*\*\***Include a short video of the whole system**\*\*\*
+
+Here is the link:
+
+https://drive.google.com/file/d/1akDl9j7-dSQAflvQndOKa5yTZAHC_1aj/view?usp=sharing
+
+The set up is very easy. It has a speaker and a microphone. It is placed next to the window for a slightly better cooling.
+When the user is asleep, it starts watching YouTube livestreams about a water pond in Africa. It then identifies the occurrences of each animal, and also take screenshots when an animal appears. It automatically stops at 6:45.
+After that, Qwen takes over, by counting the occurrences. I expect 4 animals to appear the most frequently: birds, elephants, zebras, and giraffes. They correspond to cups, pentacles, swords, and wands in a Tarot deck. The one that appears the most determines the kind (it is apparently very unfair to count it this way, but you got the idea). Then, by doing (mod 14) to the number, we can determine the exact card. For example, if birds appear 209 times, it is the 14th card of the cups, which is the King of Cups. If there is a tie or it is just a peaceful night where no animal showed up, we will draw a random Major Arcaner Card. 
+After picking the card, Qwen then will explain what the card means in the context of everyday fortune. Based on testing, it only works fine with the popular cards, like Ten of Swords. So i gave it 3-4 key words for those cards, along with images, so that it can reason better on the card.
+After the user wakes up, they will be able to see a 3-page-report. 
+The first page is a sumarry with statistics.
+The second page is the card drawn with steps of calculation.
+The last pages is the explanation and suggestion on how to spend the day. 
+
+The whole idea is all mine. AI helped uploading pictures, coding, and recommending YouTube channels. 
 
 As always, make sure you document contributions and ideas from others (and AI) explicitly in your writeup.
 
