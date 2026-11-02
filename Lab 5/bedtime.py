@@ -73,15 +73,17 @@ print("loading speech model...", flush=True)
 model = WhisperModel(args.model, device="cpu", compute_type="int8")
 print(f'say "{words[0]}" to start the night', flush=True)
 
-while True:
-    audio = sd.rec(int(args.seconds * RATE), samplerate=RATE, channels=1, dtype="float32")
-    sd.wait()
-    segments, _ = model.transcribe(audio.reshape(-1), beam_size=1, language="en", hotwords=", ".join(words))
-    heard = " ".join(s.text.strip() for s in segments).strip()
-    if heard:
-        print(f"heard: {heard}", flush=True)
-    if any(w in re.sub(r"[^a-z ]", "", heard.lower()) for w in words):
-        break
+# One microphone stream for the whole wait, read in 0.1 s pieces so Ctrl-C always gets through.
+window = int(args.seconds * RATE)
+with sd.InputStream(samplerate=RATE, channels=1, dtype="float32") as mic:
+    while True:
+        audio = np.concatenate([mic.read(int(0.1 * RATE))[0].reshape(-1) for _ in range(window // int(0.1 * RATE))])
+        segments, _ = model.transcribe(audio, beam_size=1, language="en", hotwords=", ".join(words))
+        heard = " ".join(s.text.strip() for s in segments).strip()
+        if heard:
+            print(f"heard: {heard}", flush=True)
+        if any(w in re.sub(r"[^a-z ]", "", heard.lower()) for w in words):
+            break
 
 print("good night! playing the intro, then the night begins", flush=True)
 subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "50%"],
