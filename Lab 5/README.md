@@ -480,6 +480,8 @@ The last pages is the explanation and suggestion on how to spend the day.
 
 The whole idea is all mine. AI helped uploading pictures, coding, and recommending YouTube channels. 
 
+Here are my code and log: [night.sh](night.sh), [bedtime.py](bedtime.py), [watch.py](watch.py), [tarot.py](tarot.py), [pitft_report.py](pitft_report.py), [night log A](logs/20261031_A.jsonl), [night log B](logs/20261031_B.jsonl).
+
 <details>
 	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
