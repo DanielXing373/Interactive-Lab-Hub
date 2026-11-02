@@ -1,5 +1,5 @@
 r"""
-Part G: the bedtime ritual. Say "good night" to the Pi, it answers out loud and plays a short music intro,
+Part G: the bedtime ritual. Say "go to sleep" to the Pi, it answers out loud and plays a short music intro,
 then the night starts.
 
     tmux new -s night
@@ -38,7 +38,7 @@ PIPER_RATE = 22050             # sample rate of that voice's raw output
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--words", default="good night,goodnight", help="comma-separated trigger phrases")
+parser.add_argument("--words", default="go to sleep", help="comma-separated trigger phrases")
 parser.add_argument("--seconds", type=float, default=4, help="length of each listening window")
 parser.add_argument("--model", default="base.en", help="faster-whisper model (base.en: tiny.en misses short phrases)")
 args = parser.parse_args()
