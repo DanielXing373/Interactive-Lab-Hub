@@ -322,8 +322,7 @@ Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/25
 
 The idea uses time zones around the globe. When we are sleeping in nyc, other places are having their day time. I came up with several ideas and picked several cameras and live streams around the world. I also tried to use the camera back in my home to observe my pets. Based on several trials, I ended up having the one below:
 
-[<img width="742" height="122" alt="image" src="https://github.com/user-attachments/assets/1a12949b-edc2-498e-8ec6-f0b86a2d8c22" />
-](https://drive.google.com/file/d/1akDl9j7-dSQAflvQndOKa5yTZAHC_1aj/view?usp=sharing)
+<img width="1042" height="781" alt="image" src="https://github.com/user-attachments/assets/0919ead9-5a7d-45c3-8779-ede3b7f6b1fa" />
 
 By counting the occurrences of animals in Africa around a water pond, YOLO produces logs that will be turned into a Tarot reading eventually. 
 
