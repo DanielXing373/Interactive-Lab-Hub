@@ -19,6 +19,9 @@
 </details>
 
 
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
+
 For lab this week, we focus on creating interactive systems that can detect and respond to events or stimuli in the environment of the Pi, like the Boat Detector we mentioned in lecture. 
 Your **observant device** could, for example, count items, find objects, recognize an event or continuously monitor a room.
 
@@ -26,8 +29,13 @@ This lab will help you think through the design of observant systems, particular
 
 **New this year: the AI runs on the Pi.** Your Pi 5 can run an object detector ([YOLO](https://docs.ultralytics.com/)) and a small language model ([Qwen](https://ollama.com/library/qwen3.5) through [Ollama](https://ollama.com)) completely offline. In Part 1 you get both running and connect them: YOLO *sees*, Qwen *reasons* about what was seen. These models are slow, but they have all night. In Part 2 you use them to design a **night-time interaction**: what you tell the device before bed, what it does while you sleep, and what it shows you when you wake up.
 
+</details>
+
 **Please indicate anyone that helped with this Lab here.**
 Be generous in acknowledging their contributions! And also recognizing any other influences (e.g. from YouTube, Github, Twitter) that informed your design. 
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 ## Overview
 
@@ -64,12 +72,17 @@ Please check the instructions in [prep.md](prep.md) and complete them before lab
 
 This readme.md page in your own repository should be edited to include the work you have done. You can delete everything but the headers and the sections between the \*\*\***stars**\*\*\*. Write the answers to the questions under the starred sentences. Include any material that explains what you did in this lab hub folder, and link it in the readme.
 
+</details>
+
 ---
 
 # Part 1
 
 ## Part A. 
 ### Set up your Pi for on-device AI
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 Create a virtual environment and install the requirements. They include `ultralytics` (YOLO), which pulls in torch, so this takes a while:
 
@@ -134,6 +147,8 @@ pi@raspberrypi:~ $ ollama list
 | `qwen3.5:0.8b` | ~1.3 GB | text **and images**; the one we use in this lab |
 | `qwen3:0.6b` | ~0.5 GB | text only, smaller and faster (~16 tokens/s on a Pi 5) |
 
+</details>
+
 \*\*\***Include a screenshot of `ollama list` showing your models.**\*\*\*
 
 <img width="742" height="122" alt="image" src="https://github.com/user-attachments/assets/3569de23-3566-4eae-94bb-ab91256ee94a" />
@@ -142,6 +157,9 @@ pi@raspberrypi:~ $ ollama list
 
 ## Part B. 
 ### See: recognize people in real time with YOLO
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 YOLO is an *object detector*: it finds every person, cup, cat and so on (the 80 [COCO](https://cocodataset.org/) classes), draws a box around each, and gives a confidence. For an observant system that is exactly what you want: *how many*, *where*, *how sure*.
 
@@ -162,6 +180,8 @@ Then press q to quit and run it again with a flag. Each one changes a single thi
 (.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python yolo_person.py --headless     # no window, only the printed readings: how it runs over ssh, and at night
 ```
 
+</details>
+
 \*\*\***Include a short video or screenshots of your experiments with the person detection. Write down three situations where it did not see you, or saw a person who was not there, and what you think the cause was.**\*\*\*
 
 https://drive.google.com/file/d/1PAiEB5i3rr1g7PY7tbOk5MDUTWDYEplI/view?usp=drive_link
@@ -172,6 +192,9 @@ It always sees me, but always recognize faces in the phone. I think it is lookin
 
 ## Part C. 
 ### See more: hands and pose with MediaPipe
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 YOLO tells you that a person is there. Google's [MediaPipe](https://mediapipe.dev/) tells you what their hands and body are doing: face, hand and body pose detection, fast on the Pi.
 
@@ -194,6 +217,8 @@ Try the two main features of this script: 1) pinching for percentage control (th
 
 Consider how you might use this position based approach to create an interaction, and write how you might use it on either face, hand or body pose tracking.
 
+</details>
+
 \*\*\***Include a screenshot or short video of the hand pose demo, and write how you might use face, hand or body pose tracking in your observant system.**\*\*\*
 https://drive.google.com/file/d/15DKjcScUoQl7w6LxqQvEBNZEtjll3u6s/view?usp=drive_link
 
@@ -201,6 +226,9 @@ I can use the detector for starting or ending the system.
 
 ## Part D. 
 ### Reason: run Qwen on the Pi with Ollama
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 Talk to the model in the terminal first. Qwen3 models "think" before they answer, which is slow on a Pi, so turn it off. Then ask about something you can check:
 
@@ -228,6 +256,8 @@ Things in the [Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.m
 * `images` sends a photo along with the prompt (`--image snap.jpg`, the photo from Part A). `qwen3.5:0.8b` can look at pictures.
 
 A 0.8B model is slow and sometimes wrong. It will invent events that are not in the data and agree with a wrong premise. Give it the data, keep its job narrow, and decide what the device does when the model is unsure.
+
+</details>
 
 \*\*\***Ask Qwen three questions to answer. Paste the questions, the answers and how long each took. Try one of them with `qwen3:0.6b` and compare.**\*\*\*
 
@@ -263,6 +293,9 @@ Barely faster (11.5 s vs 12.1 s) and even further off. The 0.8b answer at least 
 ## Part E. 
 ### Connect: from YOLO readings to Qwen reasoning
 
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
+
 An observant system is a pipeline: a **detector** turns pixels into boxes, an **interpreter** turns boxes into readings in words ("one person, left, close"), the readings pile up in a **log**, and a **reasoner** answers a question about the log. The language model never sees pixels, only the words you chose in the interpreter. That makes the interpreter the most important design decision in the system.
 
 `yolo_to_qwen.py` is the pipeline in one file, one function per stage. Read it before you run it:
@@ -292,9 +325,14 @@ Qwen (18.4 s):
 One person came in from the right, moved close to the camera, and left after about half a minute. ...
 ```
 
+</details>
+
 ---
 
 # Lab 5 Part 2: Overnight Sensation
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 For Part 2, you will use the observant system from Part 1 to design a night-time interaction. On-device AI is slow, so let it work while you sleep. The person meets the device twice: **before bed**, when they hand the night over, and **when awake**, when the device gives something back. In between, the pipeline from Part E runs on its own.
 
@@ -305,8 +343,13 @@ Two flavors, pick one or mix them:
 
 Two house rules. Sample rather than stream: one look every 5 to 30 seconds is plenty, and it keeps the Pi cool. And keep everything on the Pi: tell the people you live with, point the camera at things rather than at beds, and delete the snapshots after the demo.
 
+</details>
+
 ## Part F. 
 ### Read Part 2 and storyboard your night-time interaction
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 Storyboard a night-time interaction built on your observant system, in three panels:
 
@@ -317,6 +360,8 @@ Storyboard a night-time interaction built on your observant system, in three pan
 Stuck? A kitchen that tells you who raided the fridge. A desk that reports whether you actually went to bed. A window that names the quietest hour. A plant that describes its night. Find something better.
 
 Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf).
+
+</details>
 
 \*\*\***Insert ideas, sketches, Verplank diagrams and storyboards for your night-time interaction here.**\*\*\*
 
@@ -345,7 +390,12 @@ Also, it is harder to debug the camera. We need to at least pull out the image f
 ## Part G. 
 ### Design the interaction before
 
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
+
 The hand-off: the person tells the device what to watch tonight, and the device acknowledges it. Keep it to a thirty-second ritual. A button or a touch (Lab 4), a spoken sentence (Lab 3), a wave or a Quiet Coyote at the camera (Part C). The acknowledgement can be a line on the display, a tone, or an LED that dims rather than lights up. At its simplest, the hand-off just sets the question that the morning will answer.
+
+</details>
 
 \*\*\***Describe the interaction before.**\*\*\*
 
@@ -353,6 +403,9 @@ The user will tell the Pi that he or she is going to sleep. The question remains
 
 ## Part H. 
 ### Incorporate the observant system
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 The Part E pipeline becomes the night shift. `overnight.py` runs your `interpret()` from `yolo_to_qwen.py` every few seconds, people only unless you pass `--all`, and writes the readings to `night_log.jsonl`; the reasoning waits for the morning. Start it inside `tmux` so it keeps running after you close your laptop, and stop it with Ctrl-C in the morning:
 
@@ -363,12 +416,17 @@ The Part E pipeline becomes the night shift. `overnight.py` runs your `interpret
 
 Fake a night first: run it for thirty seconds while you walk around, stop it, and run `morning.py` from Part I. When that looks right, run a real night. If your storyboard needs a sensor rather than the camera, swap in the Lab 4 example code and log its reading the same way.
 
+</details>
+
 \*\*\***Screenshots or videos of the running system.**\*\*\*
 
 The Pi runs silently without a physical camera. It reads several YouTube livestreams around 1 per 30 seconds, and take screenshots when it detects an animal. Also, if the temperature is too high, it stops, but that hasn't happen yet. 
 
 ## Part I. 
 ### Design the interaction after
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 The reveal. The night produced a log; the morning turns it into something a half-awake person can take in. `morning.py` is the smallest version: it asks Qwen for a three-sentence report.
 
@@ -378,13 +436,20 @@ The reveal. The night produced a log; the morning turns it into something a half
 
 Make it yours: show the report on the Mini PiTFT, read it aloud with Piper from Lab 3, plot the night as a timeline, or ask for JSON (`--json`, Part D) and move a servo. Whatever you pick, make sure it is honest about a night in which nothing happened.
 
+</details>
+
 ## Final documentation
+
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
 
 Document all the prototypes and iterations you have designed and worked on. The deliverables for this lab are writings, sketches, photos, and videos that show what your system:
 
 * "Looks like": how the device sits in the room at night, and what it looks like at bedtime and in the morning.
 * "Works like": the pipeline from detector to interpreter to log to reasoner, with a real night's data.
 * "Acts like": how a person hands the night over and what they get back.
+
+</details>
 
 \*\*\***Include a short video of the whole system**\*\*\*
 
@@ -403,6 +468,9 @@ The last pages is the explanation and suggestion on how to spend the day.
 
 The whole idea is all mine. AI helped uploading pictures, coding, and recommending YouTube channels. 
 
+<details>
+	<summary><strong>Lab instructions (click to expand)</strong></summary>
+
 As always, make sure you document contributions and ideas from others (and AI) explicitly in your writeup.
 
 You are permitted (but not required) to work in groups and share a turn in; you are expected to make equal contribution on any group work you do, and N people's group project should look like N times the work of a single person's lab. Make sure the page for the group turn in is linked to your personal Interactive Lab Hub page.
@@ -412,6 +480,8 @@ You are permitted (but not required) to work in groups and share a turn in; you 
 For submission, the readme.md page for this lab should be edited to include the work you have done:
 * Upload any materials that explain what you did, including your code and night log, into your Lab 5 repository, and link them in your Lab 5 readme.md.
 * Labs are due on Sundays, make sure to submit your Lab 5 readme.md to Canvas.
+
+</details>
 
 <details>
   <summary><strong>Submission Cleanup Reminder (Click to Expand)</strong></summary>
