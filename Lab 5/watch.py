@@ -1,6 +1,6 @@
 """
 The night shift for any source: one look every --interval seconds, YOLO on that frame,
-one JSON line per look in logs/<name>.jsonl. report.py turns the log into the morning report.
+one JSON line per look in logs/<name>.jsonl. tarot.py turns the log into the morning card.
 
     python watch.py clip.mp4                                  # a fake night from a video file
     python watch.py https://www.youtube.com/watch?v=...       # a YouTube live stream (or a normal video)
@@ -102,7 +102,7 @@ def cpu_temp():
 
 def interpret(r):
     """Turn one YOLO result into counts, objects and a short reading in words.
-    The reading is what a person (or Qwen) reads; counts and objects are what report.py computes on."""
+    The reading is what a person (or Qwen) reads; counts and objects are what tarot.py computes on."""
     h, w = r.orig_shape
     objects = []
     for box in r.boxes:
@@ -184,4 +184,4 @@ finally:
     source.close()
     if args.show:
         cv2.destroyAllWindows()
-    print(f"\n{frames} looks logged to {log_path} ({reason}). Next: python report.py {log_path.as_posix()}")
+    print(f"\n{frames} looks logged to {log_path} ({reason}). Next: python tarot.py {log_path.as_posix()}")
