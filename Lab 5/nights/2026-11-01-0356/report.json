@@ -1,0 +1,15 @@
+{
+  "screen": [
+    "MISSED +1 h 55 min",
+    "left 04:18",
+    "back 3x"
+  ],
+  "checked": [
+    "Curfew missed: you promised 04:30, but someone was at the desk for 1 h 55 min after it, last until 06:29.",
+    "You left the desk at 04:18.",
+    "Someone came back 3 times; the longest was at 04:23, for 1 h 9 min."
+  ],
+  "qwen_raw": "Curfew kept, but I was late for 1 hour 55 minutes after you left me at 04:18. Someone came back three times, with the longest stay being just under an hour and a half starting at 04:23.",
+  "spoken": "Curfew missed: you promised 04:30, but someone was at the desk for 1 h 55 min after it, last until 06:29. You left the desk at 04:18. Someone came back 3 times; the longest was at 04:23, for 1 h 9 min.",
+  "verdict": "missed"
+}

@@ -1,0 +1,25 @@
+{
+  "kind": "real overnight recording",
+  "unit": "lab5-night-20261031-235630",
+  "requested_timezone": "America/New_York",
+  "log_timezone": "UTC",
+  "curfew_local": "2026-11-01T00:30:00-04:00",
+  "stop_local": "2026-11-01T08:00:00-05:00",
+  "curfew_utc": "2026-11-01T04:30:00+00:00",
+  "stop_utc": "2026-11-01T13:00:00+00:00",
+  "interval_seconds": 10,
+  "images_saved": false,
+  "git_commit": "36e1c8d9c4e3afdf585348f1fed1daebfe771d9c",
+  "logger_sha256": "917d49d40c59f235287bb00f11f21bdbbaa5f98a46f0845bff5fc703f3a1daf7",
+  "camera_note": "Side view mainly includes hands at the desk; the bed was not visible in the checked preview.",
+  "limitations": [
+    "The restricted view can miss a seated person when their hands leave the desk.",
+    "Room-lights-on detection was checked; detection with only the Mac screen was not tested before launch.",
+    "No detected person does not prove that the chair was empty."
+  ],
+  "status": "complete",
+  "started_utc": "2026-11-01T03:56:30.733719+00:00",
+  "ended_utc": "2026-11-01T13:00:31.411491+00:00",
+  "exit_code": 0,
+  "archive_path": "/home/pi/Interactive-Lab-Hub/Lab 5/nights/2026-11-01-0356"
+}

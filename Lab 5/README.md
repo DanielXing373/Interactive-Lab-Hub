@@ -138,7 +138,7 @@ We also considered a sleep-turn counter (from our Part C note), a fridge-raid lo
 
 Jovian said the storyboard was good overall but that the device's response could be improved. We put most of our later changes into the morning response: the whole screen now turns green or red so the answer can be read from bed, the details and Qwen's message appear only when you ask with the top button, and Qwen's wording is checked so it cannot drop the verdict or change a time.
 
-The device sits on the small round table next to my desk, with the webcam facing my desk and chair; the bed is behind it and out of view. I am the person being recorded and agreed to it, and the snapshots are deleted after the demo.
+The device sits on the small round table next to my desk, with the webcam facing my desk and chair; the bed is behind it and out of view. I am the person being observed and agreed to it. The overnight logger processes webcam frames in memory and saves only timestamped text readings and status entries, with no photos or videos saved.
 
 <img src="assets/photos/0-placement.jpg" width="360" alt="The webcam on a round orange table, facing a desk and office chair">
 
@@ -204,6 +204,28 @@ We ran two fake nights on October 29. In the first, Qwen wrote *"I was at the de
 
 The video in the final documentation shows a full hand-off and morning from a third test night, this time with a green result.
 
+### Real overnight run — October 31–November 1, 2026
+
+We ran the system overnight on Hong's Pi using the terminal fallback and a background service, so recording continued independently of SSH. The earlier photos and videos show the PiTFT interaction on our teammate's setup. This run sampled the webcam approximately every 10 seconds and saved only text; no overnight photos or videos were saved.
+
+| Item | Recorded result |
+|---|---|
+| Start | October 31, 11:56:30 PM EDT |
+| Automatic stop | November 1, 8:00:00 AM EST |
+| Elapsed recording time | 9 hours, 3 minutes, 30 seconds |
+| Chosen curfew | November 1, 12:30 AM EDT |
+| Log entries | 204 detection changes, 55 heartbeats, and 1 stop marker |
+| Longest gap between entries | 10 minutes, 9 seconds; none exceeded the 15-minute logging-gap threshold |
+| Calculated result | `MISSED +1 h 55 min`, with 3 return groups |
+
+The clocks went back during this night, so the raw log, settings, and generated report use **UTC**. For example, the stored curfew `04:30` means 12:30 AM EDT, and the stop at `13:00` means 8:00 AM EST. The table above uses New York time. The process exited successfully after generating the morning report at about 8:00:31 AM EST.
+
+Evidence: [complete night log](nights/2026-11-01-0356/night_log.jsonl), [curfew settings](nights/2026-11-01-0356/tonight.json), [generated report and original Qwen response](nights/2026-11-01-0356/report.json), [run metadata and timezone mapping](nights/2026-11-01-0356/recording-info.json), [terminal output](nights/2026-11-01-0356/terminal.log), and [reported lighting observation](nights/2026-11-01-0356/user-observations.jsonl).
+
+The camera had a restricted side view, mainly of hands at the desk, with the bed out of the checked frame. Hong reported that the room lights were off at 1:32 AM EST; the exact switch-off time was not recorded. The Mac was configured to keep its screen on as a light source, but detection under that lighting was not independently validated. The final detection change was `nobody` at 1:29:27 AM EST, followed by heartbeats through 7:59:27 AM and the stop marker at 8:00 AM. Here, **`nobody` means no person was detected**, not proof that the chair was empty or that someone was asleep.
+
+The reported 1 hour 55 minutes is an estimate from detection intervals after curfew. The code merges gaps shorter than two minutes, so the three return groups are not three independently verified physical visits. Qwen took 30.4 seconds and incorrectly changed the verdict to "Curfew kept" and the longest stay to "just under an hour and a half." The validation rejected that response and used the calculated template instead; both versions are preserved in the report. The run demonstrates that sensing, logging, stopping, and reporting worked overnight, while the limited view and lighting constrain what the detections can establish.
+
 ## Final documentation
 
 It looks like a Pi with the PiTFT on top and a webcam facing the desk chair, dark all night and green or red in the morning. It works like the pipeline in Part H, and acts like the hand-off in Part G and the reveal in Part I.
@@ -217,108 +239,3 @@ The video shows the whole system in two clips, filmed on a shortened test night 
 <video src="assets/video/2-morning.mp4" controls width="320"></video>
 
 [Clip 2: morning, the green screen and Qwen's message](assets/video/2-morning.mp4)
-
----
-
-<details>
-<summary>Original Part 2 instructions (delete before submitting)</summary>
-
-# Lab 5 Part 2: Overnight Sensation
-
-For Part 2, you will use the observant system from Part 1 to design a night-time interaction. On-device AI is slow, so let it work while you sleep. The person meets the device twice: **before bed**, when they hand the night over, and **when awake**, when the device gives something back. In between, the pipeline from Part E runs on its own.
-
-Two flavors, pick one or mix them:
-
-* **Sense all night.** The Pi watches, listens or measures from bedtime until morning and keeps a log.
-* **Process all night.** You already have the data (a day of phone photos, a long recording) and the Pi needs hours to get through it.
-
-Two house rules. Sample rather than stream: one look every 5 to 30 seconds is plenty, and it keeps the Pi cool. And keep everything on the Pi: tell the people you live with, point the camera at things rather than at beds, and delete the snapshots after the demo.
-
-## Part F. 
-### Read Part 2 and storyboard your night-time interaction
-
-Storyboard a night-time interaction built on your observant system, in three panels:
-
-1. **Before bed.** How does the person hand the night over, and how does the device acknowledge it?
-2. **While asleep.** What does the device watch or work through?
-3. **When awake.** What is the one thing the person learns, and in what medium?
-
-Stuck? A kitchen that tells you who raided the fridge. A desk that reports whether you actually went to bed. A window that names the quietest hour. A plant that describes its night. Find something better.
-
-Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf).
-
-\*\*\***Insert ideas, sketches, Verplank diagrams and storyboards for your night-time interaction here.**\*\*\*
-
-## Prep for Part 2
-
-1. Look at and give feedback on the Part F storyboards.
-   **Put the feedback for your ideas here.**
-2. [Update your Lab Hub](prep.md#get-the-latest-content) to get the latest content for Part 2.
-3. Decide where the device will spend the night and who else lives there. Get their OK before the first run.
-4. Revise your storyboard with the feedback and with what you learned in Part E about where the pipeline breaks.
-
-\*\*\***Post your revised storyboard here.**\*\*\*
-
-## Part G. 
-### Design the interaction before
-
-The hand-off: the person tells the device what to watch tonight, and the device acknowledges it. Keep it to a thirty-second ritual. A button or a touch (Lab 4), a spoken sentence (Lab 3), a wave or a Quiet Coyote at the camera (Part C). The acknowledgement can be a line on the display, a tone, or an LED that dims rather than lights up. At its simplest, the hand-off just sets the question that the morning will answer.
-
-\*\*\***Describe the interaction before.**\*\*\*
-
-## Part H. 
-### Incorporate the observant system
-
-The Part E pipeline becomes the night shift. `overnight.py` runs your `interpret()` from `yolo_to_qwen.py` every few seconds, people only unless you pass `--all`, and writes the readings to `night_log.jsonl`; the reasoning waits for the morning. Start it inside `tmux` so it keeps running after you close your laptop, and stop it with Ctrl-C in the morning:
-
-```
-(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ tmux new -s night
-(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python overnight.py
-```
-
-Fake a night first: run it for thirty seconds while you walk around, stop it, and run `morning.py` from Part I. When that looks right, run a real night. If your storyboard needs a sensor rather than the camera, swap in the Lab 4 example code and log its reading the same way.
-
-\*\*\***Screenshots or videos of the running system.**\*\*\*
-
-## Part I. 
-### Design the interaction after
-
-The reveal. The night produced a log; the morning turns it into something a half-awake person can take in. `morning.py` is the smallest version: it asks Qwen for a three-sentence report.
-
-```
-(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python morning.py
-```
-
-Make it yours: show the report on the Mini PiTFT, read it aloud with Piper from Lab 3, plot the night as a timeline, or ask for JSON (`--json`, Part D) and move a servo. Whatever you pick, make sure it is honest about a night in which nothing happened.
-
-## Final documentation
-
-Document all the prototypes and iterations you have designed and worked on. The deliverables for this lab are writings, sketches, photos, and videos that show what your system:
-
-* "Looks like": how the device sits in the room at night, and what it looks like at bedtime and in the morning.
-* "Works like": the pipeline from detector to interpreter to log to reasoner, with a real night's data.
-* "Acts like": how a person hands the night over and what they get back.
-
-\*\*\***Include a short video of the whole system**\*\*\*
-
-As always, make sure you document contributions and ideas from others (and AI) explicitly in your writeup.
-
-You are permitted (but not required) to work in groups and share a turn in; you are expected to make equal contribution on any group work you do, and N people's group project should look like N times the work of a single person's lab. Make sure the page for the group turn in is linked to your personal Interactive Lab Hub page.
-
-## Deliverables & Submission for Lab 5
-
-For submission, the readme.md page for this lab should be edited to include the work you have done:
-* Upload any materials that explain what you did, including your code and night log, into your Lab 5 repository, and link them in your Lab 5 readme.md.
-* Labs are due on Sundays, make sure to submit your Lab 5 readme.md to Canvas.
-
-<details>
-  <summary><strong>Submission Cleanup Reminder (Click to Expand)</strong></summary>
-
-  **Before submitting your README.md:**
-  - This readme.md file has a lot of extra text for guidance.
-  - Remove all instructional text and example prompts from this file.
-  - You may either delete these sections or use the toggle/hide feature in VS Code to collapse them for a cleaner look.
-  - Your final submission should be neat, focused on your own work, and easy to read for grading.
-</details>
-
-</details>
