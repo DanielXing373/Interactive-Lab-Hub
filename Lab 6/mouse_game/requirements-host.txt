@@ -1,0 +1,4 @@
+# Game host (laptop or any Pi): pip install -r requirements-host.txt
+paho-mqtt<2.0
+Flask>=3.0.0
+Flask-SocketIO>=5.3.5
