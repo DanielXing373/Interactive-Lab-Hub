@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mouse Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<style>
+  :root {
+    --butter: #ffd45c; --amber: #ffad3b; --night: #15132b; --dusk: #2d2556;
+    --wood: #8a5a2e; --wood-dark: #5e3b1c; --hole: #1d1009;
+    --tomato: #e8453c; --mint: #3ddc84; --cheese: #ffc93c; --ink: #2a1a0e;
+    --cell: min(170px, 27vw);
+    --display: "Lilita One", "Arial Rounded MT Bold", system-ui, sans-serif;
+    --body: "Nunito", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100vh; overflow-x: hidden; }
+  body {
+    font-family: var(--body); font-weight: 800; color: var(--ink);
+    background: linear-gradient(180deg, var(--night), var(--dusk));
+    display: flex; flex-direction: column; align-items: center;
+  }
+  #day {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(180deg, var(--butter), var(--amber));
+    transition: opacity 0.25s ease-out;
+  }
+  #comboTint {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at 50% 30%, #ff5fa2 0%, #b03cff 70%);
+    mix-blend-mode: soft-light; transition: opacity 0.3s ease-out;
+  }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(5,3,20,0.75) 100%);
+    transition: opacity 0.25s;
+  }
+  #redflash { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(232,69,60,0.55) 100%); }
+  #redflash.go { animation: fadeOut 0.5s ease-out; }
+  #pulse { position: fixed; inset: 0; background: #fffbe6; opacity: 0; pointer-events: none; z-index: 7; }
+  #pulse.go { animation: fadeOut 0.5s ease-out; }
+
+  /* HUD */
+  #hud { display: flex; align-items: center; gap: 14px; margin: 18px 0 10px; z-index: 8; }
+  .pill {
+    background: #fffaf0; border-radius: 999px; padding: 6px 18px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.25); display: flex; align-items: center; gap: 8px;
+  }
+  #time { font-family: var(--display); font-size: 30px; min-width: 104px; justify-content: center;
+          font-variant-numeric: tabular-nums; }
+  #time.urgent { color: var(--tomato); animation: throb 0.5s ease-in-out infinite alternate; }
+  #scoreBox { flex-direction: column; gap: 0; padding: 4px 26px; border-radius: 22px; }
+  #scoreBox small { font-size: 12px; letter-spacing: 0.12em; opacity: 0.6; }
+  #score { font-family: var(--display); font-size: 44px; line-height: 1; }
+  #score.bump { animation: bump 0.25s ease-out; }
+  #scoreRow { display: flex; align-items: center; gap: 10px; }
+  #scoreCombo { font-family: var(--display); font-size: 18px; color: #fff; background: #b8ad9a;
+                border-radius: 999px; padding: 2px 10px; transition: background 0.2s; }
+  #scoreCombo.on { background: #b03cff; }
+  #scoreCombo.bump { animation: bump 0.22s ease-out; }
+  #plate { gap: 4px; padding: 6px 14px; }
+  .slot { font-size: 34px; width: 40px; text-align: center; transition: filter 0.2s, opacity 0.2s; }
+  .slot.gone { filter: grayscale(1) brightness(0.6); opacity: 0.25; }
+  .slot.eaten { animation: eaten 0.55s ease-in forwards; }
+
+  #meters { display: flex; gap: 12px; margin-bottom: 12px; z-index: 8; font-size: 15px; }
+  #lightMeter { gap: 8px; }
+  #lightTrack { width: 120px; height: 12px; border-radius: 6px; background: #d8d2c4; overflow: hidden; }
+  #lightFill { height: 100%; width: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, var(--dusk), var(--cheese)); transition: width 0.2s ease-out; }
+  #lightText { min-width: 130px; font-variant-numeric: tabular-nums; }
+  #comboBox { font-family: var(--display); font-size: 20px; min-width: 150px; justify-content: center; }
+  #comboBox.hot { background: #ffe0ef; }
+  #comboBox.bump { animation: bump 0.22s ease-out; }
+  #comboBox.broken { animation: shakeSoft 0.3s linear; background: #ffd1cc; }
+  #mult { color: #b03cff; }
+  #stun.ready { background: #fff3b0; animation: glow 1s ease-in-out infinite alternate; }
+  #stun.active { background: var(--cheese); }
+  #stun.cooling { opacity: 0.75; }
+
+  /* Board */
+  #stage { position: relative; z-index: 4; }
+  #stage.shake { animation: shake 0.22s linear; }
+  #stage.shake-soft { animation: shakeSoft 0.25s linear; }
+  #board {
+    position: relative; display: grid; gap: 10px; padding: 18px;
+    border-radius: 28px;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 2px, transparent 2px 60px),
+      linear-gradient(180deg, var(--wood), var(--wood-dark));
+    box-shadow: 0 10px 0 #3c2410, 0 18px 40px rgba(0,0,0,0.35);
+  }
+  .cell { width: var(--cell); height: var(--cell); position: relative; }
+  .arch {
+    position: absolute; left: 14%; right: 14%; bottom: 16%; top: 14%;
+    background: radial-gradient(ellipse at 50% 100%, #3a2213 0%, var(--hole) 70%);
+    border-radius: 999px 999px 10px 10px; overflow: hidden;
+    box-shadow: inset 0 8px 14px rgba(0,0,0,0.6), 0 3px 0 rgba(255,255,255,0.12);
+  }
+  .bar { position: absolute; left: 16%; right: 16%; bottom: 5%; height: 9px; border-radius: 5px;
+         background: rgba(0,0,0,0.35); overflow: hidden; opacity: 0; transition: opacity 0.15s; }
+  .bar.retreat { height: 13px; left: 10%; right: 10%; }
+  .fill { height: 100%; width: 0; transition: width 0.08s linear; }
+  .bar.crave .fill { background: #6fb7ff; }
+  .bar.retreat .fill { background: repeating-linear-gradient(135deg, #ff8c1a 0 8px, #ffb04d 8px 16px);
+                       animation: stripes 0.4s linear infinite; }
+  .bar.frozen .fill { background: #cfe8ff; animation: none; }
+
+  .mouse { position: absolute; left: 0; right: 0; bottom: -4%; text-align: center;
+           font-size: calc(var(--cell) * 0.42); line-height: 1; will-change: transform, opacity; }
+  .mouse .body { display: inline-block; }
+  .mouse .body, .mouse .carry { opacity: var(--stealth, 1); transition: opacity 0.25s; }
+  .mouse .carry { position: absolute; right: 8%; bottom: 6%; font-size: 0.5em; transform: scale(0); }
+  .mouse .bang { position: absolute; left: 50%; top: -6%; transform: translateX(-50%) scale(0);
+                 font-family: var(--display); font-size: 0.55em; color: var(--cheese);
+                 text-shadow: 0 3px 0 var(--ink); }
+  .mouse.enter { animation: enter 0.32s cubic-bezier(.2,1.6,.4,1) both; }
+  .mouse.carrying .carry { transform: scale(1); }
+  .mouse.grabbed .carry { animation: grab 0.3s cubic-bezier(.2,1.8,.4,1); }
+  .mouse.retreat .body { animation: scurry 0.12s linear infinite alternate; }
+  .mouse.stunned .body { animation: none; filter: saturate(0.4) brightness(1.2); }
+  .mouse.stunned .bang { transform: translateX(-50%) scale(1); animation: bang 0.3s cubic-bezier(.2,1.8,.4,1); }
+  .mouse.exit-hit { animation: exitHit 0.38s ease-in forwards; }
+  .mouse.exit-escape { animation: exitEscape 0.28s ease-in forwards; }
+  .mouse.exit-poof { animation: exitPoof 0.35s ease-out forwards; }
+  .mouse.exit-fade { animation: exitFade 0.3s ease-in forwards; }
+  /* Boss: red tint, bigger, heart pips for remaining hits. */
+  .mouse.boss { font-size: calc(var(--cell) * 0.5); }
+  .mouse.boss .body { filter: sepia(1) saturate(7) hue-rotate(-45deg) brightness(0.95)
+                              drop-shadow(0 0 6px rgba(255, 40, 40, 0.9)); }
+  .mouse.boss.stunned .body { filter: sepia(1) saturate(3) hue-rotate(-45deg) brightness(1.25); }
+  .mouse .hp { display: none; position: absolute; left: 50%; top: -14%; transform: translateX(-50%);
+               font-size: 0.3em; letter-spacing: 1px; opacity: var(--stealth, 1); white-space: nowrap; }
+  .mouse.boss .hp { display: block; }
+  .mouse.hurt .body { animation: hurt 0.22s ease-out; }
+  @keyframes hurt { 0% { transform: scale(1.25) translateX(-6%); filter: brightness(3); }
+                    50% { transform: scale(0.9) translateX(6%); } 100% { transform: none; } }
+  .bar.boss.crave .fill { background: #ff5a4d; }
+  .bar.boss { height: 12px; }
+  #board.freeze .mouse, #board.freeze .mouse * , #board.freeze .fill { animation-play-state: paused !important; }
+
+  #reticle {
+    position: absolute; left: 0; top: 0; width: var(--cell); height: var(--cell);
+    border: 5px solid var(--tomato); border-radius: 26px; pointer-events: none; z-index: 3;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.55), inset 0 0 0 3px rgba(255,255,255,0.4);
+    transition: transform 0.07s ease-out;
+  }
+  #reticle.nudge { animation: nudge 0.12s ease-out; }
+  .hammer { position: absolute; right: -10%; top: -18%; font-size: calc(var(--cell) * 0.36);
+            transform-origin: 80% 80%; transform: rotate(-20deg);
+            filter: drop-shadow(0 4px 0 rgba(0,0,0,0.3)); }
+  .hammer.swing { animation: swing 0.16s ease-out; }
+
+  #fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+  .pop { position: absolute; font-family: var(--display); font-size: 34px; transform: translate(-50%, -50%);
+         text-shadow: 0 3px 0 rgba(0,0,0,0.35); animation: popUp 0.7s ease-out forwards; white-space: nowrap; }
+  .pop.good { color: #fff; -webkit-text-stroke: 1.5px #1c7a45; color: var(--mint); font-size: 42px; }
+  .pop.bad { color: var(--tomato); }
+  .pop.meh { color: #e8e1d4; font-size: 24px; }
+  .spark { position: absolute; width: 10px; height: 10px; border-radius: 50%;
+           animation: spark 0.45s cubic-bezier(.1,.7,.3,1) forwards; }
+  .dust { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: rgba(240,225,200,0.8);
+          animation: dust 0.4s ease-out forwards; }
+  .smoke { position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(230,230,255,0.75);
+           animation: smoke 0.5s ease-out forwards; }
+
+  #banner { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(0);
+            font-family: var(--display); font-size: 88px; color: #fff; z-index: 9; pointer-events: none;
+            -webkit-text-stroke: 3px var(--ink); text-shadow: 0 8px 0 var(--ink); white-space: nowrap; }
+  #banner.go { animation: banner 1.1s cubic-bezier(.2,1.6,.4,1) forwards; }
+
+  #footer { margin-top: 26px; font-size: 13px; display: flex; gap: 14px; z-index: 8;
+            background: rgba(255,250,240,0.85); border-radius: 999px; padding: 4px 14px; }
+  #mqtt::before, .pi::before { content: "●"; margin-right: 4px; color: var(--mint); }
+  #mqtt.off::before, .pi.off::before { color: var(--tomato); }
+  .pi.unknown::before { color: #b8ad9a; }
+  #toast { position: fixed; left: 50%; bottom: 40px; transform: translate(-50%, 30px); opacity: 0; z-index: 9;
+           background: var(--tomato); color: #fff; padding: 10px 22px; border-radius: 999px;
+           box-shadow: 0 5px 0 #a4261f; transition: transform 0.2s, opacity 0.2s; pointer-events: none; }
+  #toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+  /* Ready / result card */
+  #overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+             background: rgba(12,8,30,0.55); z-index: 10; backdrop-filter: blur(3px); }
+  #overlay.show { display: flex; }
+  #panel { background: #fffaf0; border-radius: 28px; padding: 26px 34px 30px; width: min(520px, 92vw);
+           box-shadow: 0 10px 0 #c9a46a, 0 24px 60px rgba(0,0,0,0.4); animation: card 0.35s cubic-bezier(.2,1.5,.4,1); }
+  #panel h1 { font-family: var(--display); font-weight: 400; font-size: 48px; margin: 0 0 4px; }
+  #tagline { margin: 0 0 14px; opacity: 0.7; }
+  #result { display: none; gap: 10px; margin-bottom: 14px; }
+  #result.show { display: flex; }
+  .stat { flex: 1; background: #ffeebd; border-radius: 16px; padding: 8px 10px; text-align: center; }
+  .stat b { display: block; font-family: var(--display); font-weight: 400; font-size: 34px; }
+  .stat span { font-size: 12px; letter-spacing: 0.08em; opacity: 0.7; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin-bottom: 14px; }
+  .keys dt { opacity: 0.65; }
+  .keys dd { margin: 0; }
+  kbd { font-family: var(--body); font-weight: 800; font-size: 12px; background: #fff; border-radius: 6px;
+        padding: 1px 7px; box-shadow: 0 2px 0 #b9a98f; border: 1px solid #d8ccb6; }
+  h3 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 10px 0 4px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 18px; font-size: 15px; font-variant-numeric: tabular-nums; }
+  td, th { padding: 4px 8px; text-align: left; }
+  th { font-size: 12px; opacity: 0.6; letter-spacing: 0.06em; }
+  tr.mine td { background: #ffe08a; }
+  tr.mine td:first-child { border-radius: 8px 0 0 8px; } tr.mine td:last-child { border-radius: 0 8px 8px 0; }
+  #empty { opacity: 0.6; font-size: 14px; margin: 4px 0 18px; }
+  #startBtn {
+    font-family: var(--display); font-size: 28px; width: 100%; padding: 12px; border: 0; border-radius: 18px;
+    background: var(--tomato); color: #fff; cursor: pointer; box-shadow: 0 6px 0 #a4261f;
+    transition: transform 0.06s, box-shadow 0.06s;
+  }
+  #startBtn:active { transform: translateY(5px); box-shadow: 0 1px 0 #a4261f; }
+  #startBtn:focus-visible { outline: 4px solid var(--cheese); outline-offset: 3px; }
+
+  @keyframes fadeOut { 0% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes throb { to { transform: scale(1.08); } }
+  @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  @keyframes eaten { 0% { transform: scale(1); } 30% { transform: scale(1.3) rotate(-12deg); }
+                     100% { transform: translateY(-30px) scale(0.4) rotate(30deg); opacity: 0; } }
+  @keyframes glow { from { box-shadow: 0 4px 0 rgba(0,0,0,0.25), 0 0 0 0 rgba(255,201,60,0.0); }
+                    to { box-shadow: 0 4px 0 rgba(0,0,0,0.25), 0 0 18px 4px rgba(255,201,60,0.9); } }
+  @keyframes shake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,4px); }
+                     40% { transform: translate(6px,-5px); } 60% { transform: translate(-4px,-3px); } 80% { transform: translate(3px,4px); } }
+  @keyframes shakeSoft { 0%,100% { transform: translate(0,0); } 25% { transform: translate(-4px,0); } 75% { transform: translate(4px,0); } }
+  @keyframes stripes { to { background-position: 22px 0; } }
+  @keyframes enter { 0% { transform: translateY(100%) scale(0.7, 1.2); opacity: 0; }
+                     60% { opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+  @keyframes grab { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: scale(1); } }
+  @keyframes scurry { from { transform: translateX(-3px) rotate(-4deg); } to { transform: translateX(3px) rotate(4deg); } }
+  @keyframes bang { 0% { transform: translateX(-50%) scale(0); } 100% { transform: translateX(-50%) scale(1); } }
+  @keyframes exitHit { 0% { transform: scale(1.3, 0.7); filter: brightness(3); }
+                       22% { transform: scale(1.3, 0.7); filter: brightness(3); }
+                       100% { transform: scale(0.1) rotate(40deg); opacity: 0; } }
+  @keyframes exitEscape { 0% { transform: translateY(0); } 30% { transform: translateY(-10%) scale(0.9, 1.1); }
+                          100% { transform: translateY(110%) scale(0.8, 1.2); opacity: 0.4; } }
+  @keyframes exitPoof { to { transform: scale(1.4); opacity: 0; filter: blur(6px); } }
+  @keyframes exitFade { to { transform: translateY(70%); opacity: 0; } }
+  @keyframes nudge { 0% { box-shadow: 0 0 0 10px rgba(255,255,255,0.8); } 100% { box-shadow: 0 0 0 4px rgba(255,255,255,0.55); } }
+  @keyframes swing { 0% { transform: rotate(-20deg); } 35% { transform: rotate(-75deg); } 70% { transform: rotate(25deg); } 100% { transform: rotate(-20deg); } }
+  @keyframes popUp { 0% { transform: translate(-50%, -30%) scale(0.4); opacity: 0; }
+                     20% { transform: translate(-50%, -70%) scale(1.25); opacity: 1; }
+                     100% { transform: translate(-50%, -170%) scale(1); opacity: 0; } }
+  @keyframes spark { to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
+  @keyframes dust { from { transform: translate(-50%, -50%) scale(0.5); } to { transform: translate(calc(-50% + var(--dx)), -50%) scale(1.6); opacity: 0; } }
+  @keyframes smoke { from { transform: translate(-50%, -50%) scale(0.4); } to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.8); opacity: 0; } }
+  @keyframes banner { 0% { transform: translate(-50%, -50%) scale(0); } 25% { transform: translate(-50%, -50%) scale(1); }
+                      75% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -60%) scale(1.1); opacity: 0; } }
+  @keyframes card { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    #stage.shake, #stage.shake-soft, #time.urgent, #stun.ready, .mouse.retreat .body { animation: none; }
+    .spark, .dust, .smoke { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="day"></div>
+<div id="comboTint"></div>
+<div id="vignette"></div>
+<div id="redflash"></div>
+<div id="pulse"></div>
+
+<div id="hud">
+  <div class="pill" id="time">60.0</div>
+  <div class="pill" id="scoreBox"><small>SCORE</small>
+    <div id="scoreRow"><span id="score">0</span><span id="scoreCombo">0×</span></div></div>
+  <div class="pill" id="plate" aria-label="Cheese left"></div>
+</div>
+<div id="meters">
+  <div class="pill" id="lightMeter"><span id="lightIcon">☀️</span>
+    <div id="lightTrack"><div id="lightFill"></div></div><span id="lightText">100%</span></div>
+  <div class="pill" id="stun">⚡ Stun ready</div>
+  <div class="pill" id="comboBox"><span id="combo">Combo 0</span>&nbsp;<span id="mult">×1</span></div>
+</div>
+
+<div id="stage">
+  <div id="board"></div>
+</div>
+
+<div id="footer">
+  <span id="mqtt" class="off">Broker offline</span>
+  <span class="pi unknown" id="pi-aim">Aim Pi</span>
+  <span class="pi unknown" id="pi-attack">Attack Pi</span>
+  <span class="pi unknown" id="pi-light">Light Pi</span>
+  <span id="sound">🔊 Sound on (M)</span>
+</div>
+
+<div id="banner"></div>
+<div id="toast"></div>
+
+<div id="overlay"><div id="panel">
+  <h1 id="title">Mouse Game</h1>
+  <p id="tagline">Three of you, one hammer. Keep the mice off the cheese for <span id="roundLen">30</span> seconds.</p>
+  <div id="result">
+    <div class="stat"><b id="rScore">0</b><span>SCORE</span></div>
+    <div class="stat"><b id="rCheese">0</b><span>CHEESE LEFT</span></div>
+    <div class="stat"><b id="rTime">0</b><span>SECONDS</span></div>
+  </div>
+  <dl class="keys">
+    <dt>Aim</dt><dd>Joystick or <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></dd>
+    <dt>Swing</dt><dd>Hand toward the sensor or <kbd>Space</kbd></dd>
+    <dt>Light</dt><dd>Open hand = bright, fist = dark, or <kbd>O</kbd> <kbd>P</kbd> <kbd>1</kbd>–<kbd>9</kbd></dd>
+    <dt>Stun</dt><dd>Go dark, then bright again, while “Stun ready” glows: every mouse freezes, then resumes</dd>
+    <dt>Boss</dt><dd>The red mouse shows up about every 10 s, takes 3 hits and has a longer bar</dd>
+    <dt>Combo</dt><dd>Every hit builds it; a miss, a stolen cheese or a dropped Pi resets it</dd>
+  </dl>
+  <h3>Leaderboard</h3>
+  <table><thead><tr><th>#</th><th>SCORE</th><th>CHEESE LEFT</th><th>TIME</th></tr></thead>
+    <tbody id="lb"></tbody></table>
+  <p id="empty">No rounds yet. Yours will be the first.</p>
+  <button id="startBtn">Start round</button>
+</div></div>
+
+<script>
+const socket = io();
+const $ = id => document.getElementById(id);
+const board = $('board'), stage = $('stage');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let state = null, cells = [], reticle = null, hammer = null, fx = null;
+let prevScore = 0, prevCheese = null, prevSecond = null, prevPhase = null;
+let overlayHoldUntil = 0, lastLocalSwing = 0;
+const exitCause = {};
+
+/* ---------------------------------------------------------------- sound */
+let audio = null, out = null, noiseBuf = null, muted = false;
+function ensureAudio() {
+  if (!audio) {
+    try {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      // tanh soft clipper: transparent at normal levels, rounds off peaks instead of hard clipping.
+      out = audio.createGain();
+      const clip = audio.createWaveShaper(), curve = new Float32Array(1024);
+      for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((i / 511.5 - 1) * 1.5) / Math.tanh(1.5);
+      clip.curve = curve;
+      out.connect(clip).connect(audio.destination);
+      noiseBuf = audio.createBuffer(1, audio.sampleRate * 0.2, audio.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      setTimeout(prebuildHitBuffers, 0);
+    } catch (e) {}
+  }
+  if (audio && audio.state === 'suspended') audio.resume();
+}
+function tone(f1, f2, dur, type = 'square', vol = 0.06, delay = 0, dest = out) {
+  if (muted || !audio) return [];
+  const t = audio.currentTime + delay, o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(dest); o.start(t); o.stop(t + dur + 0.02);
+  return [o];
+}
+/* Plucked note: two detuned oscillators through a closing low-pass filter. */
+function pluck(freq, delay = 0, vol = 0.12, dur = 0.32, dest = out) {
+  if (muted || !audio) return [];
+  const t = audio.currentTime + delay;
+  const f = audio.createBiquadFilter(), g = audio.createGain();
+  f.type = 'lowpass'; f.Q.value = 6;
+  // The filter must settle above the fundamental, or high notes get filtered to near silence.
+  f.frequency.setValueAtTime(8000, t); f.frequency.exponentialRampToValueAtTime(Math.max(900, freq * 3), t + dur * 0.6);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  f.connect(g).connect(dest);
+  const srcs = [];
+  for (const [type, cents, mix] of [['triangle', 0, 1], ['square', 7, 0.6]]) {
+    const o = audio.createOscillator(), m = audio.createGain();
+    o.type = type; o.frequency.value = freq; o.detune.value = cents; m.gain.value = mix;
+    o.connect(m).connect(f); o.start(t); o.stop(t + dur + 0.02);
+    srcs.push(o);
+  }
+  return srcs;
+}
+/* Short filtered noise burst for the impact "crack". */
+function noise(delay = 0, vol = 0.25, dur = 0.05, cutoff = 2500, dest = out) {
+  if (muted || !audio) return [];
+  const t = audio.currentTime + delay, src = audio.createBufferSource();
+  const f = audio.createBiquadFilter(), g = audio.createGain();
+  src.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = cutoff;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(g).connect(dest); src.start(t); src.stop(t + dur + 0.01);
+  return [src];
+}
+/* Hit streak sound: hammer thump + mallet tone, rendered once per voice into an AudioBuffer.
+   The streak comes from the server's hit effect, so only real swing results make a sound. */
+const HIT_SOUND = {{ hit_sound | tojson }};   // octave_groups (config.py)
+const HIT_TABLE = [            // streak 1-6 in D minor pentatonic: [main MIDI, harmony MIDI]
+  [62, []], [65, []], [67, [50, 57]], [69, []], [72, [55, 62, 67]], [74, [50, 57, 65]],
+];
+const HIT_GAIN = 0.75;         // leaves headroom for the 4-note 6th hit and overlapping tails
+const VOICE_SHAPE = {          // decay time constant and length in seconds, harmony gain, partials, thump gain
+  normal: { tau: 0.044, len: 0.20, harm: 0.09,  partials: [[1, 1], [2, 0.24], [3.02, 0.10]], thump: 0.25 },
+  final:  { tau: 0.083, len: 0.34, harm: 0.115, partials: [[1, 1], [2, 0.24], [3.02, 0.10]], thump: 0.25 },
+  apex:   { tau: 0.075, len: 0.42, harm: 0.06,  partials: [[1, 1], [2, 0.24], [3.02, 0.10]], thump: 0.38 },
+};
+// Notes below this get LOW_PARTIALS: laptop speakers drop the fundamental, the overtones carry the pitch.
+const LOW_HZ = 120, LOW_PARTIALS = [[1, 1], [2, 0.7], [3, 0.45], [4, 0.2]];
+/* Top hit and every repeat: D7 over the 2-4-6-˙2 block (D4 F4 A4 D5) on a D2-A2 power fifth,
+   doubled an octave up. Entries are [MIDI, gain]. */
+const APEX_CHORD = [
+  [38, 0.11], [45, 0.09], [50, 0.10],              // D2 A2 D3
+  [62, 0.085], [65, 0.085], [69, 0.085], [74, 0.085], // D4 F4 A4 D5
+  [77, 0.045], [81, 0.045], [86, 0.045],           // F5 A5 D6
+];
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+/* Group 0 plays table steps 1-6; each higher group skips step 1 because the previous group's
+   closing D already is its opening D. Past the top, the top D chord repeats. */
+const RISING_HITS = 6 + 5 * HIT_SOUND.octave_groups;
+function streakVoice(streak) {
+  const n = Math.min(Math.max(streak || 1, 1), RISING_HITS);
+  if (n === RISING_HITS) return { kind: 'apex', main: HIT_TABLE[5][0] + 12 * HIT_SOUND.octave_groups, harm: APEX_CHORD };
+  const group = n <= 6 ? 0 : Math.floor((n - 7) / 5) + 1;
+  const step = n <= 6 ? n - 1 : (n - 7) % 5 + 1;
+  const up = 12 * group, [main, harm] = HIT_TABLE[step];
+  return { kind: step === 5 ? 'final' : 'normal', main: main + up, harm: harm.map(m => m + up) };
+}
+const hitBuffers = new Map();
+function hitBuffer(v) {
+  const key = `${v.kind}:${v.main}:${v.harm}`;
+  if (hitBuffers.has(key)) return hitBuffers.get(key);
+  const shape = VOICE_SHAPE[v.kind], sr = audio.sampleRate, len = Math.round(shape.len * sr);
+  const buf = audio.createBuffer(1, len, sr), d = buf.getChannelData(0);
+  const notes = [[midiHz(v.main), 0.34], ...v.harm.map(h => Array.isArray(h) ? [midiHz(h[0]), h[1]] : [midiHz(h), shape.harm])]
+    .map(([f, g]) => [f, g, f < LOW_HZ ? LOW_PARTIALS : shape.partials]);
+  const TWO_PI = 2 * Math.PI, fadeIn = 0.003 * sr, fadeOut = 0.012 * sr;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    let tonal = 0;
+    for (const [f, g, partials] of notes) for (const [k, a] of partials) tonal += g * a * Math.sin(TWO_PI * k * f * t);
+    const s = shape.thump * Math.sin(TWO_PI * t * (140 + 30 * Math.exp(-t / 0.018))) * Math.exp(-t / 0.023)
+            + 0.10 * (Math.random() * 2 - 1) * Math.exp(-t / 0.007)
+            + tonal * Math.exp(-t / shape.tau);
+    d[i] = s * Math.min(1, i / fadeIn, (len - i) / fadeOut);
+  }
+  hitBuffers.set(key, buf);
+  return buf;
+}
+function prebuildHitBuffers() {
+  for (let n = 1; n <= RISING_HITS; n++) hitBuffer(streakVoice(n));
+}
+const hitLog = [];   // voices actually triggered, for in-browser checks
+function playHit(streak) {
+  if (muted || !audio) return;
+  const v = streakVoice(streak), src = audio.createBufferSource(), g = audio.createGain();
+  src.buffer = hitBuffer(v); g.gain.value = HIT_GAIN;
+  src.connect(g).connect(out); src.start();
+  src.onended = () => g.disconnect();
+  hitLog.push({ streak, ...v });
+}
+/* Play streak levels `from`..`to` back to back, e.g. previewHits(1, 20) in the console. */
+function previewHits(from = 1, to = 20, gapMs = 260) {
+  ensureAudio();
+  for (let n = from; n <= to; n++) setTimeout(() => playHit(n), (n - from) * gapMs);
+}
+const sfx = {
+  hit: streak => playHit(streak),
+  comboBreak: () => { tone(330, 220, 0.12, 'square', 0.05); tone(220, 110, 0.2, 'square', 0.05, 0.1); },
+  // C5 E5 G5 then a held C6: "da-da-da-daaa".
+  win: () => {
+    [[523, 0], [659, 0.13], [784, 0.26]].forEach(([f, d]) => {
+      tone(f, f, 0.11, 'square', 0.06, d); tone(f / 2, f / 2, 0.11, 'triangle', 0.08, d);
+    });
+    tone(1047, 1047, 0.55, 'square', 0.06, 0.4); tone(523, 523, 0.55, 'triangle', 0.08, 0.4);
+    tone(1319, 1319, 0.45, 'sine', 0.04, 0.4);
+  },
+  // F#2: a tritone away from C and outside the hit scale, so it reads as "wrong".
+  miss: () => { pluck(92.50, 0, 0.2, 0.35); tone(92.50, 92.50, 0.3, 'sine', 0.25); },
+  escape: () => tone(520, 140, 0.28, 'sawtooth', 0.045),
+  spawn: () => tone(880, 1250, 0.05, 'sine', 0.025),
+  grab: () => tone(1250, 1600, 0.05, 'square', 0.025),
+  stun: () => { tone(220, 1800, 0.28, 'sawtooth', 0.05); tone(1800, 600, 0.3, 'sine', 0.04, 0.12); },
+  poof: () => tone(400, 120, 0.15, 'triangle', 0.05),
+  go: () => { tone(523, 523, 0.09, 'square', 0.05); tone(784, 784, 0.16, 'square', 0.05, 0.1); },
+  end: () => { tone(500, 380, 0.15, 'square', 0.05); tone(380, 190, 0.35, 'square', 0.05, 0.16); },
+  tick: () => tone(1100, 1100, 0.03, 'sine', 0.03),
+  step: () => tone(600, 640, 0.02, 'sine', 0.015),
+};
+
+/* ---------------------------------------------------------------- board */
+function buildBoard(rows, cols) {
+  board.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+  board.innerHTML = '';
+  cells = [];
+  for (let r = 0; r < rows; r++) {
+    cells.push([]);
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.innerHTML = '<div class="arch"></div><div class="bar"><div class="fill"></div></div>';
+      board.appendChild(cell);
+      cells[r].push({ cell, arch: cell.firstChild, bar: cell.children[1],
+                      fill: cell.querySelector('.fill'), mouse: null });
+    }
+  }
+  reticle = document.createElement('div');
+  reticle.id = 'reticle';
+  reticle.innerHTML = '<div class="hammer">🔨</div>';
+  hammer = reticle.firstChild;
+  fx = document.createElement('div');
+  fx.id = 'fx';
+  board.append(reticle, fx);
+}
+
+function cellCenter(hole) {
+  const c = cells[hole[0]] && cells[hole[0]][hole[1]];
+  if (!c) return null;
+  return { x: c.cell.offsetLeft + c.cell.offsetWidth / 2, y: c.cell.offsetTop + c.cell.offsetHeight / 2 };
+}
+
+function moveReticle(hole) {
+  const c = cells[hole[0]] && cells[hole[0]][hole[1]];
+  if (!c || !reticle) return;
+  const t = `translate(${c.cell.offsetLeft}px, ${c.cell.offsetTop}px)`;
+  if (reticle.style.transform !== t) {
+    reticle.style.transform = t;
+    restart(reticle, 'nudge');
+  }
+}
+
+function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+function createMouse(boss) {
+  const el = document.createElement('div');
+  el.className = 'mouse enter' + (boss ? ' boss' : '');
+  el.dataset.boss = boss ? '1' : '';
+  el.innerHTML = '<span class="hp"></span><span class="body">🐭</span><span class="carry">🧀</span><span class="bang">!</span>';
+  return el;
+}
+
+function exitMouse(slot, cause) {
+  const el = slot.mouse;
+  slot.mouse = null;
+  el.classList.remove('enter', 'retreat');
+  el.classList.add('exit-' + cause);
+  setTimeout(() => el.remove(), 450);
+}
+
+/* ---------------------------------------------------------------- juice */
+function popText(hole, text, cls, dy = -10) {
+  const p = cellCenter(hole); if (!p) return;
+  const el = document.createElement('div');
+  el.className = 'pop ' + cls; el.textContent = text;
+  el.style.left = p.x + 'px'; el.style.top = (p.y + dy) + 'px';
+  fx.appendChild(el); setTimeout(() => el.remove(), 750);
+}
+
+function burst(hole, kind) {
+  if (reduceMotion) return;
+  const p = cellCenter(hole); if (!p) return;
+  const n = kind === 'spark' ? 14 : kind === 'smoke' ? 6 : 5;
+  const colors = ['#ffc93c', '#ffffff', '#3ddc84', '#ff8c1a'];
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.className = kind;
+    const a = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+    const dist = kind === 'spark' ? 60 + Math.random() * 50 : kind === 'smoke' ? 30 + Math.random() * 20 : 30;
+    el.style.setProperty('--dx', (Math.cos(a) * dist) + 'px');
+    el.style.setProperty('--dy', (Math.sin(a) * dist) + 'px');
+    el.style.left = p.x + 'px';
+    el.style.top = (p.y + (kind === 'dust' ? 40 : 0)) + 'px';
+    if (kind === 'spark') {
+      el.style.background = colors[i % colors.length];
+      const s = 6 + Math.random() * 8; el.style.width = el.style.height = s + 'px';
+    }
+    fx.appendChild(el); setTimeout(() => el.remove(), 550);
+  }
+}
+
+function shake(soft) {
+  if (reduceMotion) return;
+  stage.classList.remove('shake', 'shake-soft');
+  restart(stage, soft ? 'shake-soft' : 'shake');
+}
+
+function hitstop(ms) {
+  if (reduceMotion) return;
+  board.classList.add('freeze');
+  setTimeout(() => board.classList.remove('freeze'), ms);
+}
+
+function swingHammer() { if (hammer) restart(hammer, 'swing'); }
+
+function banner(text) { const b = $('banner'); b.textContent = text; restart(b, 'go'); }
+
+let toastTimer = null;
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+const fmt = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+/* Below 50% brightness mice fade toward 12% opacity at full dark. */
+function stealthFor(brightness) {
+  return brightness >= 50 ? 1 : 0.12 + 0.88 * (brightness / 50);
+}
+
+let prevCombo = 0;
+
+/* ---------------------------------------------------------------- render */
+function renderPlate(s) {
+  const plate = $('plate');
+  if (plate.children.length !== s.start_cheese || prevCheese === null || s.cheese > prevCheese) {
+    plate.innerHTML = '';
+    for (let i = 0; i < s.start_cheese; i++) {
+      const el = document.createElement('span');
+      el.className = 'slot' + (i < s.cheese ? '' : ' gone');
+      el.textContent = '🧀';
+      plate.appendChild(el);
+    }
+  } else if (s.cheese < prevCheese) {
+    for (let i = s.cheese; i < prevCheese; i++) {
+      const el = plate.children[i];
+      if (el) { el.classList.add('eaten'); setTimeout(() => { el.classList.remove('eaten'); el.classList.add('gone'); }, 560); }
+    }
+  }
+  prevCheese = s.cheese;
+}
+
+function render(s) {
+  if (!cells.length || cells.length !== s.rows) buildBoard(s.rows, s.cols);
+  const playing = s.phase === 'playing';
+
+  const level = s.brightness / 100;
+  $('day').style.opacity = level;
+  $('vignette').style.opacity = 1 - level;
+  $('lightFill').style.width = s.brightness + '%';
+  $('lightIcon').textContent = s.light ? '☀️' : '🌙';
+  $('lightText').textContent = `${s.brightness}% · spawn ${s.spawn_interval.toFixed(1)}s`;
+  const stealth = stealthFor(s.brightness);
+  board.style.setProperty('--stealth', stealth);
+
+  const combo = playing ? s.combo : 0;
+  $('combo').textContent = `Combo ${combo}`;
+  $('mult').textContent = `×${s.multiplier}`;
+  const box = $('comboBox');
+  box.classList.toggle('hot', s.multiplier > 1);
+  const chip = $('scoreCombo');
+  chip.textContent = combo ? `🔥${combo} ×${s.multiplier}` : 'combo 0';
+  chip.classList.toggle('on', combo > 0);
+  if (combo > prevCombo) { restart(box, 'bump'); restart(chip, 'bump'); }
+  prevCombo = combo;
+  $('comboTint').style.opacity = Math.min(combo, 20) / 20 * 0.6;
+  for (const role of ['aim', 'attack', 'light']) {
+    const on = (s.pis || {})[role];
+    $('pi-' + role).className = 'pi ' + (on === true ? '' : on === false ? 'off' : 'unknown');
+  }
+  $('roundLen').textContent = s.round_seconds;
+
+  const time = $('time');
+  time.textContent = s.time_remaining.toFixed(1);
+  time.classList.toggle('urgent', playing && s.time_remaining <= 10);
+  const sec = Math.ceil(s.time_remaining);
+  if (playing && sec <= 5 && prevSecond !== null && sec < prevSecond) sfx.tick();
+  prevSecond = sec;
+
+  if (s.score !== prevScore) {
+    if (s.score > prevScore) restart($('score'), 'bump');
+    $('score').textContent = fmt(s.score);
+    prevScore = s.score;
+  }
+  renderPlate(s);
+
+  const stun = $('stun');
+  stun.className = 'pill ' + (!playing ? '' : s.stun_active ? 'active' : s.stun_ready ? 'ready' : 'cooling');
+  stun.textContent = !playing ? '⚡ Stun' : s.stun_active ? '⚡ STUNNED!' :
+    s.stun_ready ? '⚡ Stun ready' : `⚡ Stun in ${s.stun_cooldown.toFixed(1)}s`;
+
+  const mq = $('mqtt');
+  mq.textContent = s.mqtt_connected ? 'Broker connected' : 'Broker offline';
+  mq.className = s.mqtt_connected ? '' : 'off';
+
+  const mice = {};
+  for (const m of s.mice) mice[m.hole.join(',')] = m;
+  for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) {
+    const key = r + ',' + c, slot = cells[r][c], m = mice[key];
+    if (m) {
+      if (slot.mouse && slot.mouse.dataset.boss !== (m.boss ? '1' : '')) exitMouse(slot, exitCause[key] || 'fade');
+      if (!slot.mouse) { slot.mouse = createMouse(m.boss); slot.arch.appendChild(slot.mouse); }
+      const el = slot.mouse;
+      if (m.boss) {
+        const pips = '❤️'.repeat(m.hp) + '🖤'.repeat(m.max_hp - m.hp);
+        const hp = el.querySelector('.hp');
+        if (hp.textContent !== pips) hp.textContent = pips;
+      }
+      if (m.carrying && !el.classList.contains('carrying')) {
+        el.classList.add('carrying', 'grabbed');
+        setTimeout(() => el.classList.remove('grabbed'), 320);
+        sfx.grab();
+      }
+      el.classList.toggle('retreat', m.stage === 'retreat' && !m.stunned);
+      el.classList.toggle('stunned', m.stunned);
+      slot.bar.className = `bar ${m.stage}${m.boss ? ' boss' : ''}${m.stunned ? ' frozen' : ''}`;
+      slot.bar.style.opacity = stealth;
+      slot.fill.style.width = (m.progress * 100) + '%';
+    } else {
+      if (slot.mouse) { exitMouse(slot, exitCause[key] || 'fade'); }
+      delete exitCause[key];
+      slot.bar.style.opacity = 0;
+    }
+  }
+  moveReticle(s.crosshair);
+
+  if (prevPhase === 'playing' && s.phase === 'finished') overlayHoldUntil = performance.now() + 1300;
+  prevPhase = s.phase;
+  const showOverlay = !playing && performance.now() >= overlayHoldUntil;
+  const overlay = $('overlay');
+  if (showOverlay !== overlay.classList.contains('show')) overlay.classList.toggle('show', showOverlay);
+  if (!playing && !showOverlay) setTimeout(() => state && render(state), overlayHoldUntil - performance.now() + 20);
+
+  const finished = s.phase === 'finished' && s.result;
+  $('title').textContent = finished ? (s.result.cheese === 0 ? 'Out of cheese!' : 'You survived!') : 'Mouse Game';
+  $('tagline').style.display = finished ? 'none' : '';
+  $('result').classList.toggle('show', !!finished);
+  if (finished) {
+    $('rScore').textContent = fmt(s.result.score);
+    $('rCheese').textContent = s.result.cheese;
+    $('rTime').textContent = s.result.elapsed.toFixed(1);
+  }
+  $('startBtn').textContent = finished ? 'Play again' : 'Start round';
+  const lb = s.leaderboard || [];
+  $('empty').style.display = lb.length ? 'none' : '';
+  $('lb').innerHTML = lb.map((e, i) =>
+    `<tr class="${s.result && e.round_id === s.result.round_id ? 'mine' : ''}">` +
+    `<td>${i + 1}</td><td>${fmt(e.score)}</td><td>${e.cheese}</td><td>${e.elapsed.toFixed(1)}s</td></tr>`).join('');
+}
+
+/* ---------------------------------------------------------------- events */
+const BUILD = '{{ build }}';
+socket.on('state', s => {
+  if (s.build && s.build !== BUILD) { location.reload(); return; }
+  state = s; render(s);
+});
+socket.on('effects', list => {
+  for (const e of list) {
+    const key = e.hole ? e.hole.join(',') : null;
+    if (e.type === 'hit') {
+      if (e.killed) exitCause[key] = 'hit';
+      if (performance.now() - lastLocalSwing > 200) swingHammer();
+      hitstop(e.boss ? 90 : 70);
+      sfx.hit(e.streak);
+      setTimeout(() => { burst(e.hole, 'spark'); shake(e.boss && e.killed); }, 60);
+      popText(e.hole, '+' + fmt(e.points), 'good');
+      const slot = cells[e.hole[0]][e.hole[1]];
+      if (!e.killed && slot.mouse) {
+        const el = slot.mouse;
+        restart(el, 'hurt');
+        setTimeout(() => el.classList.remove('hurt'), 240);
+      }
+    } else if (e.type === 'miss') {
+      if (performance.now() - lastLocalSwing > 200) swingHammer();
+      sfx.miss();
+      burst(e.hole, 'dust');
+      shake(true);
+      popText(e.hole, 'miss', 'meh', 20);
+    } else if (e.type === 'escape') {
+      exitCause[key] = 'escape';
+      sfx.escape();
+      restart($('redflash'), 'go');
+      shake(true);
+      popText(e.hole, '−1 🧀', 'bad');
+    } else if (e.type === 'spawn') {
+      sfx.spawn();
+      if (e.boss) toast('🔴 Boss mouse! Hit it 3 times');
+    } else if (e.type === 'stun_start') {
+      restart($('pulse'), 'go');
+      sfx.stun();
+    } else if (e.type === 'stun_end') {
+      if (e.holes.length) sfx.poof();
+    } else if (e.type === 'round_start') {
+      overlayHoldUntil = 0;
+      $('overlay').classList.remove('show');
+      banner('GO!');
+      sfx.go();
+    } else if (e.type === 'round_end') {
+      if (e.won) { banner('YOU SURVIVED!'); sfx.win(); }
+      else { banner('OUT OF CHEESE!'); sfx.end(); }
+    } else if (e.type === 'combo_break') {
+      restart($('comboBox'), 'broken');
+      if (e.reason !== 'miss') sfx.comboBreak();   // a miss already plays its own single sound
+      if (e.reason === 'miss') toast(`Combo ${e.combo} lost: missed swing`);
+      else if (e.reason === 'cheese') toast(`Combo ${e.combo} lost: a mouse stole cheese`);
+    } else if (e.type === 'pi_offline') {
+      toast(`${e.role[0].toUpperCase() + e.role.slice(1)} Pi dropped offline: counts as a miss`);
+      shake(true);
+    }
+  }
+});
+
+function send(kind, payload) { socket.emit('key_input', { kind, payload }); }
+const DIRS = { ArrowUp: [-1, 0, 'up'], ArrowDown: [1, 0, 'down'], ArrowLeft: [0, -1, 'left'], ArrowRight: [0, 1, 'right'] };
+
+$('startBtn').onclick = () => { ensureAudio(); socket.emit('start_round'); };
+document.addEventListener('keydown', e => {
+  ensureAudio();
+  if (e.repeat) return;
+  const playing = state && state.phase === 'playing';
+  const dir = DIRS[e.key];
+  if (dir) {
+    e.preventDefault();
+    send('aim', { direction: dir[2] });
+    if (playing) {
+      const r = Math.min(Math.max(state.crosshair[0] + dir[0], 0), state.rows - 1);
+      const c = Math.min(Math.max(state.crosshair[1] + dir[1], 0), state.cols - 1);
+      state.crosshair = [r, c];
+      moveReticle(state.crosshair);
+      sfx.step();
+    }
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    send('attack', { action: 'swing' });
+    if (playing) { lastLocalSwing = performance.now(); swingHammer(); }
+  }
+  else if (e.key === 'o' || e.key === 'O') send('light', { brightness: 100 });
+  else if (e.key === 'p' || e.key === 'P') send('light', { brightness: 0 });
+  else if (e.key >= '1' && e.key <= '9') send('light', { brightness: Number(e.key) * 10 });
+  else if (e.key === 'm' || e.key === 'M') {
+    muted = !muted;
+    $('sound').textContent = muted ? '🔇 Sound off (M)' : '🔊 Sound on (M)';
+  }
+  else if (e.key === 'Enter' && state && !playing) { e.preventDefault(); socket.emit('start_round'); }
+});
+window.addEventListener('resize', () => state && moveReticle(state.crosshair));
+document.addEventListener('pointerdown', ensureAudio);
+</script>
+</body>
+</html>
