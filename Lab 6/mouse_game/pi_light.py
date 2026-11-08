@@ -6,12 +6,10 @@
     python pi_light.py --web         # also stream the annotated camera to http://<pi>:8000
 
 Hand openness sets the brightness: open hand = 100, closed fist = 0, partly
-open = in between. Payload: {"brightness": 0-100}. Uses the Lab 5 MediaPipe
-install (mediapipe 0.10.18, mp.solutions.hands).
+open = in between. Payload: {"brightness": 0-100}.
 """
 
 import math
-import os
 import sys
 import time
 
@@ -21,6 +19,7 @@ import mediapipe as mp
 import config
 from controllers import BrightnessFilter, openness_from_ratios
 from pi_common import Publisher
+from web_preview import WebPreview
 
 FINGERS = ((8, 5), (12, 9), (16, 13), (20, 17))  # (tip, knuckle) for index..pinky
 WRIST = 0
@@ -41,8 +40,6 @@ def main():
     calibrate = "--calibrate" in sys.argv
     preview = None
     if "--web" in sys.argv:
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Lab 5"))
-        from web_preview import WebPreview
         preview = WebPreview(8000)
         print("Camera preview at", preview.start())
 

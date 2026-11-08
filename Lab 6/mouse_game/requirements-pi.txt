@@ -1,7 +1,0 @@
-# Every Pi needs MQTT:
-paho-mqtt<2.0
-
-# Aim Pi (joystick) and Attack Pi (proximity) -- same packages as Lab 4:
-#   pip install sparkfun-qwiic-joystick sparkfun-qwiic-proximity
-# Light Pi (camera) -- same versions as Lab 5:
-#   pip install mediapipe==0.10.18 opencv-python==4.11.0.86

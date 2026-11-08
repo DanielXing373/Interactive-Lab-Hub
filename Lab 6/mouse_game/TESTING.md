@@ -2,32 +2,26 @@
 
 三台 Pi 各接一个传感器，只负责把动作发到 MQTT；笔记本运行游戏主机并显示画面。
 
-| 角色 | 硬件 | 脚本 | 使用的环境 |
+| 角色 | 硬件 | 脚本 | 环境 |
 |---|---|---|---|
-| 主机 | 笔记本 | `host.py` | `mouse_game/.venv`（已建好） |
-| Pi 1 瞄准 | SparkFun Qwiic Joystick | `pi_aim.py` | Lab 4 的 `.venv` |
-| Pi 2 攻击 | VCNL4040 接近传感器（Patroller 那块） | `pi_attack.py` | Lab 4 的 `.venv` |
-| Pi 3 灯光 | USB 摄像头 | `pi_light.py` | Lab 5 的 `.venv`（已装 MediaPipe） |
+| 主机 | 笔记本 | `host.py` | `Lab 6/mouse_game/.venv` |
+| Pi 1 瞄准 | SparkFun Qwiic Joystick | `pi_aim.py` | 同上，各自在自己的机器上建 |
+| Pi 2 攻击 | VCNL4040 接近传感器 | `pi_attack.py` | 同上 |
+| Pi 3 灯光 | USB 摄像头 | `pi_light.py` | 同上 |
 
 MQTT topic：`IDD/mousegame/mouse-game/{aim,attack,light}`，broker 与 Lab 6 相同。
 
-## 0. 一次性准备（每台 Pi）
+## 0. 一次性准备（每台 Pi，同一套命令）
 
 ```bash
-cd ~/Interactive-Lab-Hub && git pull
+cd ~/Interactive-Lab-Hub && git checkout Fall2026 && git pull
+cd ~/Interactive-Lab-Hub/Lab\ 6/mouse_game
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Pi 1 / Pi 2：
-```bash
-cd ~/Interactive-Lab-Hub/Lab\ 4 && source .venv/bin/activate
-pip install "paho-mqtt<2.0" sparkfun-qwiic-joystick sparkfun-qwiic-proximity
-```
-
-Pi 3：
-```bash
-cd ~/Interactive-Lab-Hub/Lab\ 5 && source .venv/bin/activate
-pip install "paho-mqtt<2.0"
-```
+三台 Pi 都装这份完整依赖，用不到的包留着即可。以后每次先 `cd ~/Interactive-Lab-Hub/Lab\ 6/mouse_game && source .venv/bin/activate`。
 
 接线后用 `i2cdetect -y 1` 确认：摇杆在 `0x20`，接近传感器在 `0x60`。
 
