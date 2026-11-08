@@ -180,7 +180,14 @@ Our setup: the APDS-9960 color sensor plugs into the STEMMA QT port under the Mi
 Replace this README with your documentation:
 
 **1. Project Description**
-- What does it do? Why interesting? User experience?
+It is a 3-player game. There will be mice trying to steal cheese, and players are there to protect the chesse.
+Players have three roles, and they each take one during the game. 
+
+The first role does the aiming in the game. They use a joystick to move the crosshair up, down, left, and right.
+
+The second role does the attacking. When a mouse is aimed, they can move their palm closer to the distance sensor. That translates into attacking the mouse. A successful attack gives points, and combos give extra points. However, a miss cancels the combo.
+
+The last role controls the light. Mice comes out more often when it is dark outside. Therefore, to reach a higher score, players might want to reduce the lighting. However, darker environment also means that more mice will show up and try to steal. More importantly, there will be a red mouse, which has tripled HP,
 
 **2. Architecture Diagram**
 - Hardware, connections, data flow
