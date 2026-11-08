@@ -60,6 +60,12 @@ mosquitto_pub -h farlab.infosci.cornell.edu -p 1883 -t 'IDD/test/yourname' -m 'H
 
 **💡 Brainstorm 5 ideas for messaging between devices**
 
+- **Three-player mouse game:** Pi 1's joystick moves the crosshair, Pi 2's proximity sensor swings the hammer when a hand comes close, and Pi 3's camera turns the game light on or off with an open palm or a fist. Each Pi publishes its move, and a laptop shows the shared game screen. Topics: `IDD/<team>/mouse-game/aim`, `IDD/<team>/mouse-game/attack`, `IDD/<team>/mouse-game/light`.
+- **Roommate court across rooms:** building on our Lab 3 Mini Judge, one roommate files a complaint by voice on their Pi. The other roommate's Pi shows it and lets them answer with yes or no buttons, and the verdict appears on both screens. Topics: `IDD/<team>/court/complaint`, `IDD/<team>/court/reply`, `IDD/<team>/court/verdict`.
+- **Friends' sky clock:** building on our Lab 2 sun and moon clock, each Pi publishes its local time of day, and every Pi shows a sun or moon for each friend, so you can see at a glance whether a friend far away is awake. Topic: `IDD/<team>/sky/<name>`, with messages like `day` or `night`.
+- **Desk presence board:** inspired by the Presence Table reading, a camera or proximity sensor publishes whether someone is at their desk. The other Pis light up a dot for each friend who is there, a simple cue to say hi or study together. Topic: `IDD/<team>/presence/<name>`, with messages `here` or `away`.
+- **Quiet please signal:** tap the capacitive sensor when you start studying, and the other Pis in the apartment show "Quiet please" until you tap it again. Topic: `IDD/<team>/quiet`, with messages `on` or `off`.
+
 MQTT agrees on almost nothing in advance: you invent the topics and what the messages mean. Smart-home standards like Matter fix the vocabulary instead (every "light" behaves the same). Keep this trade-off in mind when you design your topics in Part C.
 
 ---
@@ -126,6 +132,18 @@ Hold colored objects near sensor to change your pixel!
 ![Pixel grid with two devices](imgs/two-devices-grid.png)
 
 **📸 Include: Screenshot of grid + photo of your Pi setup**
+
+<img src="imgs/part-b-grid-pink.jpg" alt="The class pixel grid open in a browser, with the Pi and its color sensor in front of the laptop. The bottom right pixel is pink, matching the Pi's screen." width="640">
+
+Our pixel (bottom right) matches the pink on the Pi's screen.
+
+<img src="imgs/part-b-grid-purple.jpg" alt="The same pixel grid after a different color is held under the sensor. The bottom right pixel and the Pi's screen are now light purple." width="640">
+
+With a different color under the sensor, our pixel and the Pi's screen both turn light purple.
+
+<img src="imgs/part-b-pi-setup.jpg" alt="Close-up of the Raspberry Pi with the Mini PiTFT showing the color data it sends, and a hand holding the APDS-9960 color sensor connected by a cable" width="480">
+
+Our setup: the APDS-9960 color sensor plugs into the STEMMA QT port under the Mini PiTFT, and the screen shows the color data the Pi sends.
 
 ---
 
