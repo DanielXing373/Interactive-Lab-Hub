@@ -24,11 +24,10 @@ SW_TAB_Z   = 28.0;  // 【已量】耳朵下表面离机身底面（草图标 �
 SW_TAB_L   = 54.6;  // 【已量】含耳朵总长
 SW_HOLE_DX = 49.5;  // 【量】两端耳朵孔距（现在是 DS3218 标称值；耳朵是开口槽，胶粘时不影响）
 SW_HOLE_DY = 10.0;  // 【量】同一耳朵两孔距（同上）
-SW_HOLE_OUT = 1.0;  // 螺丝孔沿耳朵开口槽往外挪的量（避开出线槽，孔和槽之间留约 0.45 墙）
 SW_SHAFT   = 9.0;   // 【已量】输出轴中心离机身近端（草图标 ≈9）
-SW_WIRE_W  = 8;    // 【量】出线块宽（照片估 ≈7）。出线槽宽度 = 这个值；不能再宽，否则会切到输出轴那端的两个螺丝孔
-SW_WIRE_P  = 3.2;  // 【已量】出线块凸出机身端面
-SW_WIRE_H  = 5;    // 底部走线通道高度（出线块高 4）
+SW_WIRE_W  = 8;    // 出线块宽（照片估 ≈7，只用于预览）
+SW_WIRE_P  = 3.2;  // 【已量】出线块凸出机身端面（只用于预览）
+// 11/19 实打后改：输出轴那一端整面敞开（不再开出线槽），只用远端耳朵的两颗螺丝固定
 HORN_TOP   = 9.5;   // 【量】舵盘顶面高出机身顶盖（只影响预览图）
 HORN_D     = 24.0;  // 【量】舵盘外径（只影响预览图）
 HORN_PCD   = 16.0;  // 【量】舵盘固定孔所在圆直径
@@ -77,13 +76,10 @@ function zc(i)    = colh(i) + ZC0;                              // 牌面相对�
 BR_WALL = 6;
 BR_Y = SW_TAB_L + 12;
 pocket_cy = -(SW_L / 2 - SW_SHAFT);
-// 出线槽（在输出轴那一端 +Y）：紧贴机身端面的一段从底开到顶，让出线块跟着机身从上面放进去；
-// 再往外只在底部开一条走线通道。这样输出轴那端的两个螺丝孔不会被切掉。
-module wire_cut(z0, h, len) {
-  y_end = SW_L / 2 + SW_WIRE_P + 0.6;   // 出线块外沿 + 0.6 余量
-  translate([-SW_WIRE_W / 2, 0, z0 - 0.01]) cube([SW_WIRE_W, y_end, h + 0.02]);
-  translate([-SW_WIRE_W / 2, 0, z0 - 0.01]) cube([SW_WIRE_W, len, SW_WIRE_H]);
-}
+// 输出轴那一端（+Y）整面敞开：宽 = 卡槽宽、从底到顶，出线块和线完全不受挡
+module open_end(z0, h, len) translate([-(SW_W + 2*CLR) / 2, 0, z0 - 0.01]) cube([SW_W + 2*CLR, len, h + 0.02]);
+// 螺丝孔：只在远离输出轴的那一端（-Y）两个
+module far_holes(z0, h) for (sy = [-1, 1]) translate([sy * SW_HOLE_DY / 2, -SW_HOLE_DX / 2, z0]) cylinder(d = 2.6, h = h);
 module bracket() {
   difference() {
     union() for (i = [0:3])
@@ -91,8 +87,8 @@ module bracket() {
         cube([PITCH_X + (i == 0 || i == 3 ? BR_WALL : 0), BR_Y, riser(i) + SW_TAB_Z]);
     for (i = [0:3]) translate([px(i), pocket_cy, 0]) {
       translate([-(SW_W + 2*CLR) / 2, -(SW_L + 2*CLR) / 2, riser(i)]) cube([SW_W + 2*CLR, SW_L + 2*CLR, SW_TAB_Z + 1]);
-      wire_cut(riser(i), SW_TAB_Z + 2, BR_Y / 2 + 1);
-      for (sx = [-1, 1], sy = [-1, 1]) translate([sy * SW_HOLE_DY / 2, sx * (SW_HOLE_DX / 2 + SW_HOLE_OUT), riser(i) + SW_TAB_Z - 12]) cylinder(d = 2.6, h = 13);
+      open_end(riser(i), SW_TAB_Z + 2, BR_Y / 2 + 1);
+      far_holes(riser(i) + SW_TAB_Z - 12, 13);
     }
   }
 }
@@ -144,12 +140,12 @@ module arm_print(i) translate([0, 0, colh(i) + ARM_T]) mirror([0, 0, 1]) arm(i);
 // ---------------- 装配测试件 ----------------
 // 可以分开打："fit_big" 大 motor 卡槽，"fit_col" 立柱底座，"fit_small" 小 motor 托架；"fittest" = 三块一起
 // 量得不准没关系：改参数、重新导出、再打，每块几分钟
-module fit_big() {   // 大 motor 收纳盒的一圈（6mm 高），舵机插进去看松紧，出线口在输出轴那端
+module fit_big() {   // 大 motor 收纳盒的一圈（6mm 高），舵机插进去看松紧，输出轴那端敞开
   difference() {
     translate([-(SW_W + 12) / 2, -SW_TAB_L / 2 - 3, 0]) cube([SW_W + 12, SW_TAB_L + 6, 6]);
     translate([-(SW_W + 2*CLR) / 2, -(SW_L + 2*CLR) / 2, -1]) cube([SW_W + 2*CLR, SW_L + 2*CLR, 8]);
-    wire_cut(-1, 8, SW_TAB_L);
-    for (sx = [-1, 1], sy = [-1, 1]) translate([sy * SW_HOLE_DY / 2, sx * (SW_HOLE_DX / 2 + SW_HOLE_OUT), -1]) cylinder(d = 2.6, h = 8);
+    open_end(-1, 8, SW_TAB_L);
+    far_holes(-1, 8);
   }
 }
 module fit_col() {   // 立柱底座：试粘到舵盘上，看中心螺丝能否从孔里拧到
