@@ -5,7 +5,7 @@
 //   "layout"  整体预览（不打印）
 //   "bracket" 摆动舵机支架 x1
 //   "arm0".."arm3" 四根臂（已转成打印朝向：梁贴床，立柱朝上）
-//   "fittest"  装配测试件：摆动舵机卡槽 + 舵盘轮毂 + 翻牌舵机托架（量完尺寸后先打这个）
+//   "fit_big" / "fit_small" / "fit_col"  装配测试件（大 motor 卡槽 / 小 motor 底座 / 立柱底座），"fittest" = 三块合一
 // 牌夹不打印：用现成的夹子，胶粘在翻牌舵机的舵盘上（见 CLIP_OFF / CLIP_T）
 PART  = "layout";
 STYLE = "column";   // "column" = 平支架，臂上有立柱（已选定）；"step" = 阶梯支架，臂是平的
