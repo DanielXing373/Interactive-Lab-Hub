@@ -119,7 +119,6 @@ module fl_seat(cx) {
 module arm(i) {
   cx = -px(i);
   tip = [cx, SEAT_Y0 + SEAT_BAR / 2];
-  u = tip / norm(tip);
   difference() {
     union() {
       cylinder(d = COL_D + (STYLE == "step" ? 10 : 0), h = colh(i) + ARM_T);
@@ -130,7 +129,10 @@ module arm(i) {
     }
     if (HORN_BOLTS) for (k = [0:3]) rotate(45 + 90 * k) translate([HORN_PCD / 2, 0, -1]) cylinder(d = HORN_HOLE, h = colh(i) + ARM_T + 2);
     translate([0, 0, -1]) cylinder(d = 6.2, h = colh(i) + ARM_T + 2);   // 舵盘中心螺丝的通孔（螺丝刀从顶上伸进去）
-    translate([0, 0, colh(i) - 1]) beam(u * (COL_D / 2 + 2), [cx, SEAT_Y0 + 2], 4, 4);   // 走线槽：在臂背面（画板一侧），观众看不到
+    // 11/22：走线槽删掉（用不上）。梁末端的圆头原来高出横梁 2mm、顶进小 motor 的位置，
+    // 这里把小 motor 机身占的空间（出线端再往外多让 5mm）整块挖掉，只留横梁、挡墙、面板
+    translate([cx - FL_SHAFT - 5, FL_BOT_Y, colh(i) - 1])
+      cube([FL_L + 5, FL_H + FL_ABOVE + 5, 1 + ZC0 + FL_T / 2]);
   }
 }
 
