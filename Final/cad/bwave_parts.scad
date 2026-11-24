@@ -1,92 +1,85 @@
-// B'Wave 机构 - 打印件（参数化，OpenSCAD）
-// 坐标：XY = 画板平面（Y 指向牌的上方），Z = 离开画板、朝观众
-// 牌的编号：0 = 最前面（离观众最近），3 = 最后面（最靠画板）
-// 用法：改 PART，F6 渲染，File > Export > STL
-//   "layout"  整体预览（不打印）
-//   "bracket" 摆动舵机支架 x1
-//   "arm0".."arm3" 四根臂（已转成打印朝向：梁贴床，立柱朝上）
-//   "fit_big" / "fit_small" / "fit_col"  装配测试件（大 motor 卡槽 / 小 motor 底座 / 立柱底座），"fittest" = 三块合一
-// 牌夹不打印：用现成的夹子，胶粘在翻牌舵机的舵盘上（见 CLIP_OFF / CLIP_T）
-PART  = "layout";
-STYLE = "column";   // "column" = 平支架，臂上有立柱（已选定）；"step" = 阶梯支架，臂是平的
-GIMMICK = 2;        // 结局牌是第几张（0 起，从前往后），默认第 3 张
-STATE = 0;          // 预览用：0 叠放，1 展开·揭示1，2 结局牌移出，3 白板散开
-BRANCH = 1;         // 预览用：1 = 红桃分支，-1 = 方块分支（所有角度镜像，结局牌移出方向相反）
+// B'Wave mechanism - printed parts (parametric OpenSCAD)
+// Axes: XY = drawing-board plane (+Y points toward the top of the cards), Z = away from the board, toward the audience
+// Card index: 0 = front (closest to the audience), 3 = back (closest to the board)
+// Usage: set PART, render (F6), File > Export > STL
+//   "layout"         full assembly preview (not printed)
+//   "bracket"        swing-servo bracket x1
+//   "arm0".."arm3"   the four arms, already in print orientation (front face on the bed, column up)
+// The card clips are not printed: off-the-shelf clips glued onto the flip-servo horns (see CLIP_OFF / CLIP_T)
+PART    = "layout";
+GIMMICK = 2;   // which card is the gimmick card (0-based, front to back)
+STATE   = 0;   // preview only: 0 stacked, 1 fanned (reveal 1), 2 gimmick card out, 3 blanks spread
+BRANCH  = 1;   // preview only: 1 = hearts branch, -1 = diamonds branch (all angles mirrored)
 $fn = 40;
 
-// ================= 到货后用卡尺量，改这里 =================
-// 摆动舵机：实际到货的是 Miuzei MS24-F（20kg，270°，25T 花键 Ø5.9）
-// 【已量】= 11/18 草图上的数；【量】= 还没量
-SW_L = 40.4; SW_W = 20.2;  // 【已量】机身长（草图有 40 和 40.4 两个数，取大的，卡槽宁松勿紧）/ 宽
-SW_H       = 39.3;  // 【已量】机身顶盖高度 = 28 + 11.3
-SW_SPLINE_TOP = 46.5; // 【已量】花键顶面离机身底面
-SW_TAB_Z   = 28.0;  // 【已量】耳朵下表面离机身底面（草图标 ≈28）
-SW_TAB_L   = 54.6;  // 【已量】含耳朵总长
-SW_HOLE_DX = 49.5;  // 【量】两端耳朵孔距（现在是 DS3218 标称值；耳朵是开口槽，胶粘时不影响）
-SW_HOLE_DY = 10.0;  // 【量】同一耳朵两孔距（同上）
-SW_SHAFT   = 9.0;   // 【已量】输出轴中心离机身近端（草图标 ≈9）
-SW_WIRE_W  = 8;    // 出线块宽（照片估 ≈7，只用于预览）
-SW_WIRE_P  = 3.2;  // 【已量】出线块凸出机身端面（只用于预览）
-// 11/19 实打后改：输出轴那一端整面敞开（不再开出线槽），只用远端耳朵的两颗螺丝固定
-HORN_TOP   = 9.5;   // 【量】舵盘顶面高出机身顶盖（只影响预览图）
-HORN_D     = 24.0;  // 【量】舵盘外径（只影响预览图）
-HORN_PCD   = 16.0;  // 【量】舵盘固定孔所在圆直径
-HORN_HOLE  = 3.2;
+// ================= Measured dimensions =================
+// "measured" = taken from the 11/18 sketches (see ../measurements/); "est." = not measured yet
+// Swing servo: Miuzei MS24-F (20 kg, 270 deg, 25T spline, d5.9)
+SW_L = 40.4; SW_W = 20.2;   // measured: body length (sketch shows 40 and 40.4, took the larger) / width
+SW_H       = 39.3;  // measured: body top = 28 + 11.3
+SW_SPLINE_TOP = 46.5; // measured: spline top above body bottom
+SW_TAB_Z   = 28.0;  // measured: ear underside above body bottom
+SW_TAB_L   = 54.6;  // measured: overall length including ears
+SW_SHAFT   = 9.0;   // measured: output shaft center from the near end of the body
+SW_WIRE_W  = 8;     // est.: wire-exit block width (preview only)
+SW_WIRE_P  = 3.2;   // measured: wire-exit block sticks out of the end face (preview only)
+HORN_TOP   = 9.5;   // est.: horn top above body top (preview only)
+HORN_D     = 24.0;  // est.: horn diameter (preview only)
 
-FL_L = 22.7;        // 【已量】MG90S 机身长（不含耳朵）
-FL_T = 12.2;        // 【已量】机身厚约 12，按标称 12.2 算
-FL_H = 22.5;        // 【量】机身高（底面到顶盖，不含上面的凸台）——只影响牌的高度，四个一样，不影响整齐
-FL_SHAFT   = 5.9;   // 【量】输出轴中心离机身近端（出线那一端）——同上，只影响牌的左右位置，四个一样
-FL_TAB_FROM_TOP = 6.5; // 耳朵下表面离顶盖（托架不碰耳朵，只用于预览；挡墙和面板高度已避开 4–6.5 的范围）
-FL_TAB_SPAN = 32.3; // 【已量】含耳朵总长
-FL_BOSS = 7; FL_SPLINE = 5;  // 【已量】顶盖上面：塑料凸台 7 + 金属花键 5 = 12
-FL_ABOVE   = FL_BOSS + FL_SPLINE + 1;   // 【量】装上舵盘后舵盘顶面高出顶盖（花键顶 + 约 1，待量）
-// 小 motor 底座（三面定位）：底面贴横梁、远离输出轴那一端贴挡墙、朝观众那一面贴面板。
-// 出线那一端（输出轴端）和画板一侧敞开；不碰耳朵。舵机往角里一推，三面贴紧再上胶。
-SEAT_BAR   = 6;     // 底部横梁高
-SEAT_WALL  = 3;     // 挡墙厚
-SEAT_WALL_H = 12;   // 挡墙高（从机身底面算，低于耳朵）
-PLATE_T    = 1.6;   // 面板厚（打印时贴床，贴舵机那一面最平）
-PLATE_H    = 14;    // 面板高（从机身底面算，低于耳朵）
-RELIEF_D   = 1.2;   // 内角退让槽直径（防止打印出来的内圆角顶住舵机棱边）
-// 现成夹子（胶粘在翻牌舵机舵盘上，夹口朝外，牌面要过舵机输出轴的轴线）
-CLIP_OFF   = 3.0;   // 【量】舵盘顶面到牌下边缘（牌插到底后）的距离
-CLIP_T     = 10.0;  // 【量】夹子最厚处（朝观众方向），翻牌时要小于层间距
-CLIP_W     = 15.0;  // 【量】夹子宽度（只影响预览图）
-CLIP_H     = 12.0;  // 【量】夹子高度（只影响预览图）
+// Flip servo: MG90S
+FL_L = 22.7;        // measured: body length (without ears)
+FL_T = 12.2;        // measured: body thickness (~12, nominal 12.2)
+FL_H = 22.5;        // est.: body height (bottom to top, without boss); only shifts card height, same for all four
+FL_SHAFT   = 5.9;   // est.: shaft center from the near (wire) end; only shifts card left/right, same for all four
+FL_TAB_FROM_TOP = 6.5; // ear underside below body top (preview only; seat wall and plate stay below it)
+FL_TAB_SPAN = 32.3; // measured: overall length including ears
+FL_BOSS = 7; FL_SPLINE = 5;           // measured: plastic boss 7 + metal spline 5 above the body top
+FL_ABOVE   = FL_BOSS + FL_SPLINE + 1; // est.: horn top above body top
+// Flip-servo seat (3-face locating): body bottom on the bar, far end against the end wall, front face on the plate.
+// The wire end and the board side stay open; the ears are not touched. Push into the corner, then glue.
+SEAT_BAR    = 6;    // bottom bar height
+SEAT_WALL   = 3;    // end wall thickness
+SEAT_WALL_H = 12;   // end wall height above the body bottom (below the ears)
+PLATE_T     = 1.6;  // front plate thickness (on the bed when printing, so the face touching the servo is flat)
+PLATE_H     = 14;   // front plate height above the body bottom (below the ears)
+RELIEF_D    = 1.2;  // inside-corner relief grooves (keep printed fillets off the servo edges)
+// Off-the-shelf clip glued on the flip-servo horn (card plane passes through the shaft axis)
+CLIP_OFF   = 3.0;   // est.: horn top to card bottom edge
+CLIP_T     = 10.0;  // est.: clip thickness toward the audience (must stay below the layer pitch)
+CLIP_W     = 15.0;  // est.: clip width (preview only)
+CLIP_H     = 12.0;  // est.: clip height (preview only)
 CARD_W = 63.5; CARD_H = 88.9;
 
-// ================= 布局 =================
-PITCH_X = STYLE == "step" ? 50 : 34;  // 转轴左右间隔（碰撞检查：立柱 34mm 时最小余量约 10mm）
-PITCH_Z = 15;     // 臂上立柱的层间距（臂已打好，不再改）；实际层间距 = PITCH_Z + LAYER_LIFT（见支架）
-ARM_L   = 150;    // 转轴到牌下边缘
+// ================= Layout =================
+PITCH_X = 34;     // swing-axis spacing (min clearance arm-to-neighbor-column ~8 mm)
+PITCH_Z = 15;     // layer step built into the arm columns (arms are printed, do not change).
+                  // Real layer pitch = PITCH_Z + LAYER_LIFT (see bracket) = 18 mm
+ARM_L   = 150;    // swing axis to card bottom edge
 BEAM_W  = 10;
-ZC0     = 5;                          // 牌面（= 小 motor 输出轴）离臂背面的距离
-ARM_T   = ZC0 + FL_T / 2 + PLATE_T;   // 臂的厚度：背面 → 面板正面（≈12.7），整根臂正面齐平，打印时整面贴床
-COL_D   = 20;     // 立柱直径（碰撞余量按 20mm 核对过）
-HORN_BOLTS = false; // 舵盘用胶粘（false）还是打 M3 螺丝孔（true，要求立柱够粗，到货后再定）
+ZC0     = 5;                          // card plane (= flip-servo shaft) above the arm back face
+ARM_T   = ZC0 + FL_T / 2 + PLATE_T;   // arm thickness, back face to front plate (~12.7); whole front is flat for the bed
+COL_D   = 20;     // column diameter
 CLR     = 0.3;
 
-function px(i)    = (i - 1.5) * PITCH_X;
-function riser(i) = STYLE == "step"   ? (3 - i) * PITCH_Z : 0;  // 舵机垫高
-function colh(i)  = STYLE == "column" ? (3 - i) * PITCH_Z : 0;  // 臂上立柱
-function zc(i)    = colh(i) + ZC0;                              // 牌面相对本舵盘顶面
+function px(i)   = (i - 1.5) * PITCH_X;
+function colh(i) = (3 - i) * PITCH_Z;   // column height on arm i
+function zc(i)   = colh(i) + ZC0;       // card plane above this arm's horn top
 
-// ---------------- 支架 ----------------
-BR_WALL = 6;
-BR_Y = SW_TAB_L + 12;
-pocket_cy = -(SW_L / 2 - SW_SHAFT);
-// 输出轴那一端（+Y）整面敞开：宽 = 卡槽宽、从底到顶，出线块和线完全不受挡
+// ---------------- Bracket ----------------
+// v3 (11/24): with the arms already glued to the horns, the layers touched at the far end
+// (flip-servo back to the next plate was only 1.2 mm). Arms unchanged; instead the bracket gets a floor
+// and each pocket floor is raised per layer by LAYER_LIFT. Servos are located by the floor only
+// (no glue under them) and glued on the side walls. Wall tops sit EAR_GAP below the ears so an ear can
+// never prop a servo up on one side. No screw holes.
+BR_WALL    = 6;
+BR_Y       = SW_TAB_L + 12;
+BR_FLOOR   = 2;   // floor thickness
+LAYER_LIFT = 3;   // extra lift per layer (conservative, not measured powered): motor-to-plate gap 1.2 -> 4.2 mm
+EAR_GAP    = 1;   // wall top below the ear underside
+pocket_cy  = -(SW_L / 2 - SW_SHAFT);
+function seat(i) = BR_FLOOR + (3 - i) * LAYER_LIFT;   // swing-servo body bottom height
+// Output-shaft end (+Y) fully open, pocket width, floor to top: wire block and cable are never blocked
 module open_end(z0, h, len) translate([-(SW_W + 2*CLR) / 2, 0, z0 - 0.01]) cube([SW_W + 2*CLR, len, h + 0.02]);
-// 螺丝孔：只在远离输出轴的那一端（-Y）两个
-module far_holes(z0, h) for (sy = [-1, 1]) translate([sy * SW_HOLE_DY / 2, -SW_HOLE_DX / 2, z0]) cylinder(d = 2.6, h = h);
-// v3（11/24）：臂已粘在舵盘上、打好了，末端发现上下层会碰（小 motor 背面 ↔ 后一层面板只有 1.2mm）。
-// 不改臂，改支架：加整体底板，每格底面按层垫高 LAYER_LIFT，实际层间距 = PITCH_Z + LAYER_LIFT。
-// 舵机只靠底面定位（底面不涂胶），侧壁上胶；墙顶比耳朵低 EAR_GAP，耳朵碰不到墙顶，不会把舵机单边撑歪。不再开螺丝孔。
-BR_FLOOR   = 2;     // 底板厚
-LAYER_LIFT = 3;     // 每层额外垫高（没通电量过，取保守值；motor↔面板间隙 1.2 → 4.2mm）
-EAR_GAP    = 1;     // 墙顶低于耳朵下表面
-function seat(i) = BR_FLOOR + riser(i) + (3 - i) * LAYER_LIFT;   // 大 motor 机身底面高度
 module bracket() {
   difference() {
     union() for (i = [0:3])
@@ -99,24 +92,24 @@ module bracket() {
   }
 }
 
-// ---------------- 臂 ----------------
-FL_TOP_Y = ARM_L - CLIP_OFF - FL_ABOVE;   // 翻牌舵机顶盖的位置，由"转轴到牌下边缘 = ARM_L"倒推
+// ---------------- Arms ----------------
+FL_TOP_Y = ARM_L - CLIP_OFF - FL_ABOVE;   // flip-servo body top, derived from "axis to card bottom = ARM_L"
 FL_BOT_Y = FL_TOP_Y - FL_H;
 FL_TAB_Y = FL_TOP_Y - FL_TAB_FROM_TOP;
 module beam(a, b, w, t) { hull() { translate([a[0], a[1], 0]) cylinder(d = w, h = t); translate([b[0], b[1], 0]) cylinder(d = w, h = t); } }
-// 小 motor 底座（臂局部坐标：z = 0 是臂背面，z = ARM_T 是臂正面/面板正面）。cx = 输出轴的 x。
-SEAT_Y0 = FL_BOT_Y - SEAT_BAR;   // 底座最下沿
+// Flip-servo seat (arm-local: z = 0 is the arm back face, z = ARM_T the front plate face). cx = shaft x.
+SEAT_Y0 = FL_BOT_Y - SEAT_BAR;   // lowest edge of the seat
 module fl_seat(cx) {
-  xa = cx - FL_SHAFT;            // 机身近端（出线端，敞开）
-  xb = xa + FL_L;                // 机身远端（贴挡墙）
-  zf = ZC0 + FL_T / 2;           // 机身正面（贴面板）
+  xa = cx - FL_SHAFT;            // near (wire) end of the body, open
+  xb = xa + FL_L;                // far end of the body, against the end wall
+  zf = ZC0 + FL_T / 2;           // front face of the body, against the plate
   difference() {
     union() {
-      translate([xa, SEAT_Y0, 0]) cube([xb + SEAT_WALL - xa, SEAT_BAR, ARM_T]);                       // 底部横梁
-      translate([xb, SEAT_Y0, 0]) cube([SEAT_WALL, SEAT_BAR + SEAT_WALL_H, ARM_T]);                   // 远端挡墙
-      translate([xa, SEAT_Y0, zf]) cube([xb + SEAT_WALL - xa, SEAT_BAR + PLATE_H, PLATE_T]);          // 正面面板
+      translate([xa, SEAT_Y0, 0]) cube([xb + SEAT_WALL - xa, SEAT_BAR, ARM_T]);                // bottom bar
+      translate([xb, SEAT_Y0, 0]) cube([SEAT_WALL, SEAT_BAR + SEAT_WALL_H, ARM_T]);            // end wall
+      translate([xa, SEAT_Y0, zf]) cube([xb + SEAT_WALL - xa, SEAT_BAR + PLATE_H, PLATE_T]);   // front plate
     }
-    // 内角退让槽
+    // inside-corner reliefs
     translate([xa - 1, FL_BOT_Y, zf]) rotate([0, 90, 0]) cylinder(d = RELIEF_D, h = FL_L + 2, $fn = 12);
     translate([xb, FL_BOT_Y - 1, zf]) rotate([-90, 0, 0]) cylinder(d = RELIEF_D, h = PLATE_H + 2, $fn = 12);
     translate([xb, FL_BOT_Y, -1]) cylinder(d = RELIEF_D, h = zf + 1.01, $fn = 12);
@@ -127,58 +120,27 @@ module arm(i) {
   tip = [cx, SEAT_Y0 + SEAT_BAR / 2];
   difference() {
     union() {
-      cylinder(d = COL_D + (STYLE == "step" ? 10 : 0), h = colh(i) + ARM_T);
+      cylinder(d = COL_D, h = colh(i) + ARM_T);
       translate([0, 0, colh(i)]) {
         beam([0, 0], tip, BEAM_W, ARM_T);
         fl_seat(cx);
       }
     }
-    if (HORN_BOLTS) for (k = [0:3]) rotate(45 + 90 * k) translate([HORN_PCD / 2, 0, -1]) cylinder(d = HORN_HOLE, h = colh(i) + ARM_T + 2);
-    translate([0, 0, -1]) cylinder(d = 6.2, h = colh(i) + ARM_T + 2);   // 舵盘中心螺丝的通孔（螺丝刀从顶上伸进去）
-    // 11/22：走线槽删掉（用不上）。梁末端的圆头原来高出横梁 2mm、顶进小 motor 的位置，
-    // 这里把小 motor 机身占的空间（出线端再往外多让 5mm）整块挖掉，只留横梁、挡墙、面板
+    translate([0, 0, -1]) cylinder(d = 6.2, h = colh(i) + ARM_T + 2);   // through-hole for the horn center screw
+    // v2 (11/22): keep the flip-servo body space clear (plus 5 mm past the wire end).
+    // The round beam end used to stick 2 mm into it.
     translate([cx - FL_SHAFT - 5, FL_BOT_Y, colh(i) - 1])
       cube([FL_L + 5, FL_H + FL_ABOVE + 5, 1 + ZC0 + FL_T / 2]);
   }
 }
-
-// 打印朝向：上下翻转，让臂正面（面板）贴打印床，立柱朝上，不需要支撑
+// Print orientation: flipped so the front plate is on the bed and the column points up; no supports
 module arm_print(i) translate([0, 0, colh(i) + ARM_T]) mirror([0, 0, 1]) arm(i);
 
-// ---------------- 装配测试件 ----------------
-// 可以分开打："fit_big" 大 motor 卡槽，"fit_col" 立柱底座，"fit_small" 小 motor 托架；"fittest" = 三块一起
-// 量得不准没关系：改参数、重新导出、再打，每块几分钟
-module fit_big() {   // 大 motor 收纳盒的一圈（6mm 高），舵机插进去看松紧，输出轴那端敞开
-  difference() {
-    translate([-(SW_W + 12) / 2, -SW_TAB_L / 2 - 3, 0]) cube([SW_W + 12, SW_TAB_L + 6, 6]);
-    translate([-(SW_W + 2*CLR) / 2, -(SW_L + 2*CLR) / 2, -1]) cube([SW_W + 2*CLR, SW_L + 2*CLR, 8]);
-    open_end(-1, 8, SW_TAB_L);
-    far_holes(-1, 8);
-  }
-}
-module fit_col() {   // 立柱底座：试粘到舵盘上，看中心螺丝能否从孔里拧到
-  difference() {
-    cylinder(d = COL_D, h = 10);
-    translate([0, 0, -1]) cylinder(d = 6.2, h = 12);
-  }
-}
-module fit_small() { // 小 motor 底座（和臂末端完全一样，多带 15mm 梁），已是打印朝向：面板贴床
-  translate([0, -SEAT_Y0, ARM_T]) mirror([0, 0, 1]) {
-    fl_seat(0);
-    translate([-BEAM_W / 2, SEAT_Y0 - 15, 0]) cube([BEAM_W, 15.01, ARM_T]);
-  }
-}
-module fittest() {
-  fit_big();
-  translate([40, 0, 0]) fit_col();
-  translate([85, -20, 0]) fit_small();
-}
-
-// ---------------- 预览用假零件 ----------------
+// ---------------- Preview-only dummies ----------------
 module sw_dummy() {
   color("dimgray") translate([-SW_W / 2, pocket_cy - SW_L / 2, 0]) cube([SW_W, SW_L, SW_H]);
   color("dimgray") translate([-SW_W / 2, pocket_cy - SW_TAB_L / 2, SW_TAB_Z]) cube([SW_W, SW_TAB_L, 2.5]);
-  color("dimgray") translate([-SW_WIRE_W / 2 + 2, pocket_cy + SW_L / 2, 0]) cube([SW_WIRE_W - 4, 3.2, 4]);   // 出线块
+  color("dimgray") translate([-SW_WIRE_W / 2 + 2, pocket_cy + SW_L / 2, 0]) cube([SW_WIRE_W - 4, SW_WIRE_P, 4]);   // wire block
   color("silver") translate([0, 0, SW_H]) cylinder(d = HORN_D, h = HORN_TOP);
 }
 module fl_dummy(i) {
@@ -188,21 +150,20 @@ module fl_dummy(i) {
   translate([cx, FL_TOP_Y, zc(i)]) rotate([-90, 0, 0]) {
     color("dimgray") cylinder(d = 11, h = FL_BOSS);
     color("silver") translate([0, 0, FL_BOSS]) cylinder(d = 4.8, h = FL_SPLINE);
-    color("white") translate([0, 0, FL_ABOVE - 1.5]) cylinder(d = 7, h = 1.5);   // 舵盘轮毂
+    color("white") translate([0, 0, FL_ABOVE - 1.5]) cylinder(d = 7, h = 1.5);   // horn hub
   }
 }
-// 轴线标记（只在预览里）：红 = 摆动轴（指向观众），绿 = 翻牌轴（沿牌的竖中线）
+// Axis markers (preview only): red = swing axis (toward the audience), green = flip axis (card center line)
 SHOW_AXES = true;
-EXPLODE = 0;   // seatdemo 用：把舵机往画板方向拉开多少 mm
 module swing_axis(i) color("red") translate([0, 0, -SW_H - HORN_TOP - 5]) cylinder(d = 1.5, h = SW_H + HORN_TOP + colh(i) + ARM_T + 35);
 module flip_axis(i) color("lime") translate([-px(i), FL_BOT_Y - 10, zc(i)]) rotate([-90, 0, 0]) cylinder(d = 1.5, h = ARM_L + CARD_H - FL_BOT_Y + 25);
 module label(s, p) color("black") translate(p) linear_extrude(1) text(s, size = 7, halign = "center", valign = "center");
 module card(i) {
   cx = -px(i);
   color(i == GIMMICK ? "orangered" : "white") translate([cx - CARD_W / 2, ARM_L, zc(i) - 0.15]) cube([CARD_W, CARD_H, 0.3]);
-  color("gold") translate([cx - CLIP_W / 2, ARM_L - CLIP_OFF, zc(i) - CLIP_T / 2]) cube([CLIP_W, CLIP_H, CLIP_T]);   // 现成夹子（粘在舵盘上）
+  color("gold") translate([cx - CLIP_W / 2, ARM_L - CLIP_OFF, zc(i) - CLIP_T / 2]) cube([CLIP_W, CLIP_H, CLIP_T]);   // clip
 }
-// 摆角（模拟器默认值，白板散开角度待重新调；方块分支 = 红桃分支取反）
+// Swing angles (simulator defaults; blank-spread angles still to be tuned; diamonds = hearts mirrored)
 SP = [for (i = [0:3]) (i - 1.5) * 3.5];
 function ang0(i) =
   STATE == 0 ? 0 :
@@ -211,7 +172,7 @@ function ang0(i) =
   (i == GIMMICK ? 40 : [-44, -16, 12][i < GIMMICK ? i : i - 1]);
 function ang(i) = BRANCH * ang0(i);
 module layout() {
-  color("tan") translate([-180, -90, -3]) cube([360, 360, 3]);          // 画板
+  color("tan") translate([-180, -90, -3]) cube([360, 360, 3]);   // drawing board
   color("lightsteelblue") bracket();
   for (i = [0:3]) translate([px(i), 0, seat(i)]) {
     sw_dummy();
@@ -229,33 +190,9 @@ module layout() {
   }
 }
 
-// 底座特写（只预览）：一个底座 + 小 motor + 夹子 + 牌的下半截
-module seat_demo(explode = 0) {
-  color("steelblue") fl_seat(0);
-  color("steelblue") translate([-BEAM_W / 2, SEAT_Y0 - 20, 0]) cube([BEAM_W, 20.01, ARM_T]);
-  translate([0, 0, -explode]) {
-    color("black") translate([-FL_SHAFT, FL_BOT_Y, ZC0 - FL_T / 2]) cube([FL_L, FL_H, FL_T]);
-    color("black") translate([-FL_SHAFT + FL_L / 2 - FL_TAB_SPAN / 2, FL_TOP_Y - FL_TAB_FROM_TOP, ZC0 - FL_T / 2]) cube([FL_TAB_SPAN, 2.5, FL_T]);
-    color("orange") translate([-FL_SHAFT - 6, FL_BOT_Y + 3, ZC0 - 1]) cube([6, 2, 2.5]);   // 出线
-    translate([0, FL_TOP_Y, ZC0]) rotate([-90, 0, 0]) {
-      color("dimgray") cylinder(d = 11, h = FL_BOSS);
-      color("silver") translate([0, 0, FL_BOSS]) cylinder(d = 4.8, h = FL_SPLINE);
-      color("white") translate([0, 0, FL_ABOVE - 1.5]) cylinder(d = 7, h = 1.5);
-    }
-    color("gold") translate([-CLIP_W / 2, ARM_L - CLIP_OFF, ZC0 - CLIP_T / 2]) cube([CLIP_W, CLIP_H, CLIP_T]);
-    color("white") translate([-CARD_W / 2, ARM_L, ZC0 - 0.15]) cube([CARD_W, 40, 0.3]);
-    color("lime") translate([0, FL_BOT_Y - 8, ZC0]) rotate([-90, 0, 0]) cylinder(d = 1.2, h = ARM_L + 50 - FL_BOT_Y);
-  }
-}
-
 if (PART == "layout") layout();
-else if (PART == "seatdemo") seat_demo(EXPLODE);
 else if (PART == "bracket") bracket();
 else if (PART == "arm0") arm_print(0);
 else if (PART == "arm1") arm_print(1);
 else if (PART == "arm2") arm_print(2);
 else if (PART == "arm3") arm_print(3);
-else if (PART == "fittest") fittest();
-else if (PART == "fit_big") fit_big();
-else if (PART == "fit_col") fit_col();
-else if (PART == "fit_small") fit_small();

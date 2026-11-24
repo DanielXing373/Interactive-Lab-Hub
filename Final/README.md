@@ -1,91 +1,89 @@
-# Final Project：B'Wave 机械魔术 — 打印与采购清单
+# Final Project: B'Wave Mechanical Magic — Build Notes
 
-> 状态：v3（2026-11-18）。大 motor 已按实物量过（Miuzei MS24-F）；小 motor 改成三面定位底座。先打测试件 `fit_small` / `fit_big`，通过后再打支架和臂。
+> Status: v3 (2026-11-24). Arms printed and glued to the swing-servo horns. Bracket v3 raises each servo per layer so the arms no longer touch at the far end.
 >
-> 模拟器（v3 实测尺寸）：https://claude.ai/artifact/RSUVDBuvrbHuEkYq2YyT6w
+> Simulator (measured dimensions, 15 mm layer pitch, before bracket v3): https://claude.ai/artifact/RSUVDBuvrbHuEkYq2YyT6w
 
-## 1. 已确定的设计
+## 1. Design decisions
 
-| 项目 | 决定 |
+| Item | Decision |
 |---|---|
-| 摆放 | 斜台，复用电脑支架当画板；零件装在正面，Pi 和电源装在背面 |
-| 支架方案 | 立柱方案：靠臂上的立柱拉开层间距；v3 支架再把四个摆动舵机按层垫高（S0 +9 / S1 +6 / S2 +3 / S3 0 mm） |
-| 转轴左右间隔 | 34 mm |
-| 层间距 | **18 mm** = 立柱 15 + 支架垫高 3。原来 15 mm 时，小 motor 背面（凸出臂背面 1.1）到后一层面板只有 1.2 mm，实装后末端会碰；现在 4.2 mm，梁与梁 5.3 mm |
-| 小 motor 固定 | 三面定位底座：底面贴横梁、远离输出轴一端贴挡墙、朝观众一面贴 1.6 mm 面板；出线端和画板一侧敞开，不碰耳朵。推到角里、三面贴紧再上胶 |
-| 臂长 | 转轴到牌下边缘 150 mm |
-| 立柱高度 | 最前一张 45 / 第 2 张 30 / 第 3 张 15 / 最后一张 0 mm |
-| 结局牌位置 | 从前往后第 3 张（`GIMMICK = 2`） |
-| 揭示 2 的移出方向 | 两个分支相反（红桃往左，方块往右） |
-| 驱动板 | 用 Lab 4 的 SparkFun Servo pHAT（16 路，用 8 路） |
-| 固定方式 | 大 motor（v3）：机身底面平贴卡槽底板定位（底面不涂胶），推到同一个角落、按住，在侧壁缝上沿点强力胶；墙顶比耳朵低 1 mm，耳朵不碰支架；无螺丝孔 |
-| 牌夹 | 不打印。用现成夹子胶粘在翻牌舵机的舵盘上，舵盘再插回舵机 |
-| 摆动舵机 | Miuzei MS24-F（20kg，**270°**，25T 花键 Ø5.9） |
+| Mounting | Tilted stand, reusing a laptop stand as the drawing board; mechanism on the front, Pi and power on the back |
+| Layering | Columns on the arms (15 mm steps) plus bracket v3 raising the swing servos per layer (S0 +9 / S1 +6 / S2 +3 / S3 0 mm) |
+| Swing-axis spacing | 34 mm |
+| Layer pitch | **18 mm** = 15 (columns) + 3 (bracket lift). At 15 mm the flip-servo back (sticks out 1.1 mm behind its arm) was only 1.2 mm from the next arm's plate and the arms touched at the far end. Now 4.2 mm, beam to beam 5.3 mm |
+| Flip-servo seat | 3-face locating: body bottom on the bar, far end against the end wall, front face on the 1.6 mm plate. Wire end and board side open, ears untouched. Push into the corner, then glue |
+| Arm length | Swing axis to card bottom edge: 150 mm |
+| Column heights | Front card 45 / 2nd 30 / 3rd 15 / back 0 mm |
+| Gimmick card | 3rd from the front (`GIMMICK = 2`) |
+| Reveal-2 direction | Opposite in the two branches (hearts left, diamonds right) |
+| Driver board | SparkFun Servo pHAT from Lab 4 (16 channels, 8 used) |
+| Swing-servo mounting | Body bottom sits flat on the pocket floor (no glue underneath). Push all four into the same corner, hold, and put superglue along the top of the side-wall gap. Wall tops are 1 mm below the ears, no screw holes |
+| Card clips | Not printed. Off-the-shelf clips glued onto the flip-servo horns |
+| Swing servo | Miuzei MS24-F (20 kg, **270°**, 25T spline d5.9) |
 
-碰撞检查（按模拟器默认角度、两个分支都算）：摆臂离相邻立柱最近约 8 mm。
+Collision checks (all four states, both branches): adjacent layers never overlap; closest arm to a neighboring column is about 8 mm.
 
-预览图：
+Renders:
 
-- **总览（带轴线标注）**：[cad/renders/review_v3.png](cad/renders/review_v3.png)：叠放、揭示 1、揭示 2 两个分支、侧面、底座特写。红线 = 摆动轴，绿线 = 翻牌轴
-- 红桃分支：[cad/renders/overview_heart.png](cad/renders/overview_heart.png)
-- 方块分支：[cad/renders/overview_diamond.png](cad/renders/overview_diamond.png)
+- Far-end gap, before vs. now: [cad/renders/bracket_v3_side_gap.png](cad/renders/bracket_v3_side_gap.png)
+- Assembly, stacked: [cad/renders/overview_v3_stacked.png](cad/renders/overview_v3_stacked.png)
+- Assembly, blanks spread: [cad/renders/overview_v3_fanned.png](cad/renders/overview_v3_fanned.png)
+- Bracket v3: [cad/renders/part_bracket_v3.png](cad/renders/part_bracket_v3.png)
 
-## 2. 打印清单
+## 2. Print list
 
-文件都在 [cad/stl/](cad/stl/)，源文件是 [cad/bwave_parts.scad](cad/bwave_parts.scad)（OpenSCAD，改 `PART` 导出）。
+STLs are in [cad/stl/](cad/stl/); the source is [cad/bwave_parts.scad](cad/bwave_parts.scad) (OpenSCAD, set `PART` and export).
 
-| # | 零件 | 文件 | 数量 | 什么时候打 | 打印朝向 / 备注 |
-|---|---|---|---|---|---|
-| 1a | 大 motor 卡槽测试 | `fit_big.stl` | 1 | 可跳过 | 32 × 61 × 6 mm 的 U 形，输出轴那端敞开。支架已直接实打过，这件只在以后改卡槽时用 |
-| 1b | 小 motor 底座测试 | `fit_small.stl` | 1 | **现在** | 和臂末端一模一样，已是打印朝向（面板贴床，不需要支撑）。小 motor 推进角里，看底面、挡墙、面板三面能否同时贴紧，出线端是否通畅 |
-| 1c | 立柱底座测试 | `fit_col.stl` | 1 | 可选 | 试粘到大 motor 舵盘上，看中心螺丝能否从孔里拧到 |
-| 2 | 大 motor 收纳盒（支架） | `bracket.stl` | 1 | 1a 通过后 | 底板贴床，开口朝上，不需要支撑。约 148 × 67 × 38 mm，填充 15–20% 即可。v3（11/24）：加整体底板，每格底面按层垫高 3 mm，墙顶低于耳朵 1 mm，去掉螺丝孔（见上面"层间距"）。v2（11/19）：输出轴那一端整面敞开（每格是 U 形） |
-| 3 | 臂（最前一张） | `arm0.stl` | 1 | 1b 通过后 | 已转成打印朝向：正面（面板一侧）贴床、立柱朝上，不需要支撑。v2（11/22）：删掉走线槽；修掉梁末端顶进小 motor 位置的 2mm 圆头（对比图 [cad/renders/arm_fix_before_after.png](cad/renders/arm_fix_before_after.png)） |
-| 4 | 臂（第 2 张） | `arm1.stl` | 1 | 同上 | 同上 |
-| 5 | 臂（第 3 张，结局牌） | `arm2.stl` | 1 | 同上 | 同上 |
-| 6 | 臂（最后一张） | `arm3.stl` | 1 | 同上 | 同上 |
-
-建议打印参数：PLA，层高 0.2 mm，3 层外墙，填充 20–30%（臂用 30%）。
-
-## 3. 到货后要量的尺寸
-
-在 `bwave_parts.scad` 顶部，【已量】是 11/18 草图上的数，【量】是还缺的。草图和照片在 [measurements/](measurements/)。
-
-**摆动舵机 MS24-F**：已量机身 40.4 × 20.2、顶盖高 39.3、花键顶 46.5、耳朵下表面 28、含耳朵总长 54.6、输出轴离近端 ≈9、出线块（高 4，凸出 3.2）。还缺：耳朵孔距 `SW_HOLE_DX` / `SW_HOLE_DY`（目前用的默认值，已对过实物，基本吻合）；舵盘 `HORN_TOP` / `HORN_D`（只影响预览）。
-
-**小 motor（MG90S）**：已量机身长 22.7、含耳朵总长 32.3、厚约 12；顶盖上面是塑料凸台 7 + 金属花键 5。
-
-底座是三面定位，靠的是"贴紧"而不是"卡紧"。四个底座完全一样，尺寸有偏差时四张牌偏得也一样，叠起来依然整齐。
-
-还没量、只影响牌的绝对位置（不影响四张整齐）的：
-- 机身高 `FL_H`：影响牌的高度。
-- 输出轴离出线端 `FL_SHAFT`：影响牌的左右位置。
-- 装上舵盘后舵盘顶面高出顶盖 `FL_ABOVE`：影响牌的高度。
-
-**夹子**（粘到舵盘上之后量）：舵盘顶面到牌下边缘 `CLIP_OFF`、夹子最厚处 `CLIP_T`（要小于 15）。
-
-测试件不合适就改参数、重新导出、再打，每块几分钟。
-
-## 4. 采购清单
-
-| # | 用途 | 商品 | 数量 | 备注 |
+| # | Part | File | Qty | Orientation / notes |
 |---|---|---|---|---|
-| 1 | 摆动舵机 | 已买：Miuzei MS24-F 20kg 数字舵机（270°） | — | 500–2500 µs 对应 270°，中位 1500 µs |
-| 2 | 翻牌舵机 | [Beffkkip MG90S 金属齿 8 只装](https://www.amazon.com/MG90S-Servo-Motor-Helicopter-Arduino/dp/B01JY3H4MA) | 1 盒 | 4 个用 + 4 个备用。到货先逐个测能否转满 180° |
-| 3 | 延长线 | [Yiqigou 30cm 舵机延长线 10 根](https://www.amazon.com/10pcs-Female-Servo-Extension-Futaba/dp/B07NJB58XC) | 1 包 | 翻牌舵机的线要沿臂走到驱动板 |
-| 4 | 舵机电源 | 充电宝（USB-C 输出 5V ≥ 3A） | 1 | 只给舵机用，插 Servo pHAT 的 USB-C。最好带"小电流模式"，否则舵机静止时可能自动断电 |
-| 5 | Pi 电源 | 充电宝或 Pi 5 官方电源 | 1 | 与舵机电源分开 |
-| 6 | 量具 | 数显卡尺 | 1 | 学校有就不用买 |
+| 1 | Swing-servo bracket | `bracket.stl` | 1 | Floor on the bed, pockets up, no supports. About 148 × 67 × 38 mm, 15–20% infill. v3: floor with per-layer lift, walls 1 mm below the ears, no screw holes |
+| 2 | Arm, front card | `arm0.stl` | 1 | Already in print orientation: front plate on the bed, column up, no supports. v2: no wire groove; beam end no longer sticks into the flip-servo space |
+| 3 | Arm, 2nd card | `arm1.stl` | 1 | Same |
+| 4 | Arm, 3rd card (gimmick) | `arm2.stl` | 1 | Same |
+| 5 | Arm, back card | `arm3.stl` | 1 | Same |
 
-**不需要买**：Adafruit 驱动板、10A 电源（改用 Lab 4 的 Servo pHAT + 充电宝）；螺丝（暂时用胶水）。
+Print settings: PLA, 0.2 mm layers, 3 walls, 20–30% infill (30% for the arms).
 
-## 5. 待办和注意事项
+## 3. Dimensions
 
-- [ ] Servo pHAT 与 Pi 分开供电：需要切断板上的隔离跳线，动手前先核对 SparkFun 官方 hookup guide。
-- [ ] 充电宝实测：连续开机 30 分钟，看会不会自动断电。
-- [ ] 白板散开的角度要重新调：当前是模拟器的旧默认值（当时按结局牌在最后一张设的），第 4 阶段有白板挡住结局牌。
-- [ ] 结局牌移出角度（当前 40°）待调。
-- [ ] 胶水：不要粘在输出轴和舵盘附近（胶渗进去会卡死），舵机机身尽量别粘死（坏了要换）。舵机附带的小螺丝能用就用。
-- [ ] 交互方式待定。
-- [ ] 摆动舵机是 270°：PCA9685 在 50 Hz 下一步约 4.9 µs ≈ 0.66°，牌角处约 2.7 mm。揭示 1 的 3.5° 只有约 5 步，到时实测露出宽度够不够稳。
-- [ ] 夹子粘舵盘：先把舵盘拔下来平放着粘，夹子中线对准舵盘中心；胶别碰到花键孔。
+Measured values are at the top of `bwave_parts.scad` ("measured" = from the 11/18 sketches, "est." = not measured yet). Sketches and photos are in [measurements/](measurements/).
+
+**Swing servo MS24-F**: body 40.4 × 20.2, body top 39.3, spline top 46.5, ear underside 28, length with ears 54.6, shaft ≈9 from the near end, wire block 4 high sticking out 3.2. Horn `HORN_TOP` / `HORN_D` are estimates (preview only).
+
+**Flip servo MG90S**: body length 22.7, length with ears 32.3, thickness ≈12; boss 7 + spline 5 above the body top.
+
+The seat locates by contact on three faces, not by a press fit. All four seats are identical, so any dimension error shifts all four cards the same way and the stack stays aligned.
+
+Not measured yet; these only move the cards as a group (alignment is unaffected):
+- Body height `FL_H`: card height.
+- Shaft to wire end `FL_SHAFT`: card left/right position.
+- Horn top above body top `FL_ABOVE`: card height.
+
+**Clips** (measure after gluing to the horns): horn top to card bottom edge `CLIP_OFF`, clip thickness `CLIP_T` (must stay below the 18 mm pitch).
+
+## 4. Shopping list
+
+| # | Use | Item | Qty | Notes |
+|---|---|---|---|---|
+| 1 | Swing servos | Bought: Miuzei MS24-F 20 kg digital servo (270°) | — | 500–2500 µs = 270°, center 1500 µs |
+| 2 | Flip servos | [Beffkkip MG90S metal gear, 8-pack](https://www.amazon.com/MG90S-Servo-Motor-Helicopter-Arduino/dp/B01JY3H4MA) | 1 box | 4 used + 4 spares. Check each turns a full 180° before gluing |
+| 3 | Extension leads | [Yiqigou 30 cm servo extensions, 10-pack](https://www.amazon.com/10pcs-Female-Servo-Extension-Futaba/dp/B07NJB58XC) | 1 pack | Flip-servo leads run along the arms to the driver board |
+| 4 | Servo power | Power bank (USB-C 5 V ≥ 3 A) | 1 | Servos only, into the Servo pHAT USB-C. Ideally with a low-current mode, or it may shut off while servos idle |
+| 5 | Pi power | Power bank or official Pi 5 supply | 1 | Separate from servo power |
+| 6 | Measuring | Digital calipers | 1 | Not needed if the school has one |
+
+**Not needed**: Adafruit driver board, 10 A supply (using the Lab 4 Servo pHAT + power bank); screws (glue instead).
+
+## 5. To do / notes
+
+- [ ] Power the Servo pHAT separately from the Pi: cut the isolation jumper; check the SparkFun hookup guide first.
+- [ ] Power bank test: run for 30 minutes and see whether it shuts off.
+- [ ] Before gluing the swing servos, power them and confirm each one sweeps its full range. Superglue is permanent.
+- [ ] Glue S3 (lowest pocket) first, fit its arm and run it slowly through its range to check the far end, then glue the others.
+- [ ] Re-tune the blank-spread angles: they are old simulator defaults (set when the gimmick card was last); in stage 4 a blank hides the gimmick card.
+- [ ] Tune the gimmick-card exit angle (currently 40°).
+- [ ] Glue: keep it away from output shafts, horns and spline holes; do not let thin superglue wick into servo case seams.
+- [ ] Interaction method still open.
+- [ ] Swing servos are 270°: one PCA9685 step at 50 Hz is about 4.9 µs ≈ 0.66°, about 2.7 mm at the card corner. Reveal 1 at 3.5° is only ~5 steps; check the reveal width is stable.
+- [ ] Clip on horn: take the horn off and glue the clip flat, centered on the horn; keep glue out of the spline hole.
