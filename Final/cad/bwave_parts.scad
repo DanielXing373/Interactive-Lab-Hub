@@ -58,7 +58,7 @@ CARD_W = 63.5; CARD_H = 88.9;
 
 // ================= 布局 =================
 PITCH_X = STYLE == "step" ? 50 : 34;  // 转轴左右间隔（碰撞检查：立柱 34mm 时最小余量约 10mm）
-PITCH_Z = 15;     // 层间距
+PITCH_Z = 15;     // 臂上立柱的层间距（臂已打好，不再改）；实际层间距 = PITCH_Z + LAYER_LIFT（见支架）
 ARM_L   = 150;    // 转轴到牌下边缘
 BEAM_W  = 10;
 ZC0     = 5;                          // 牌面（= 小 motor 输出轴）离臂背面的距离
@@ -80,15 +80,21 @@ pocket_cy = -(SW_L / 2 - SW_SHAFT);
 module open_end(z0, h, len) translate([-(SW_W + 2*CLR) / 2, 0, z0 - 0.01]) cube([SW_W + 2*CLR, len, h + 0.02]);
 // 螺丝孔：只在远离输出轴的那一端（-Y）两个
 module far_holes(z0, h) for (sy = [-1, 1]) translate([sy * SW_HOLE_DY / 2, -SW_HOLE_DX / 2, z0]) cylinder(d = 2.6, h = h);
+// v3（11/24）：臂已粘在舵盘上、打好了，末端发现上下层会碰（小 motor 背面 ↔ 后一层面板只有 1.2mm）。
+// 不改臂，改支架：加整体底板，每格底面按层垫高 LAYER_LIFT，实际层间距 = PITCH_Z + LAYER_LIFT。
+// 舵机只靠底面定位（底面不涂胶），侧壁上胶；墙顶比耳朵低 EAR_GAP，耳朵碰不到墙顶，不会把舵机单边撑歪。不再开螺丝孔。
+BR_FLOOR   = 2;     // 底板厚
+LAYER_LIFT = 3;     // 每层额外垫高（没通电量过，取保守值；motor↔面板间隙 1.2 → 4.2mm）
+EAR_GAP    = 1;     // 墙顶低于耳朵下表面
+function seat(i) = BR_FLOOR + riser(i) + (3 - i) * LAYER_LIFT;   // 大 motor 机身底面高度
 module bracket() {
   difference() {
     union() for (i = [0:3])
       translate([px(i) - PITCH_X / 2 + (i == 0 ? -BR_WALL : 0), pocket_cy - BR_Y / 2, 0])
-        cube([PITCH_X + (i == 0 || i == 3 ? BR_WALL : 0), BR_Y, riser(i) + SW_TAB_Z]);
+        cube([PITCH_X + (i == 0 || i == 3 ? BR_WALL : 0), BR_Y, seat(i) + SW_TAB_Z - EAR_GAP]);
     for (i = [0:3]) translate([px(i), pocket_cy, 0]) {
-      translate([-(SW_W + 2*CLR) / 2, -(SW_L + 2*CLR) / 2, riser(i)]) cube([SW_W + 2*CLR, SW_L + 2*CLR, SW_TAB_Z + 1]);
-      open_end(riser(i), SW_TAB_Z + 2, BR_Y / 2 + 1);
-      far_holes(riser(i) + SW_TAB_Z - 12, 13);
+      translate([-(SW_W + 2*CLR) / 2, -(SW_L + 2*CLR) / 2, seat(i)]) cube([SW_W + 2*CLR, SW_L + 2*CLR, SW_TAB_Z + 1]);
+      open_end(seat(i), SW_TAB_Z + 2, BR_Y / 2 + 1);
     }
   }
 }
@@ -207,7 +213,7 @@ function ang(i) = BRANCH * ang0(i);
 module layout() {
   color("tan") translate([-180, -90, -3]) cube([360, 360, 3]);          // 画板
   color("lightsteelblue") bracket();
-  for (i = [0:3]) translate([px(i), 0, riser(i)]) {
+  for (i = [0:3]) translate([px(i), 0, seat(i)]) {
     sw_dummy();
     translate([0, 0, SW_H + HORN_TOP]) {
       if (SHOW_AXES) {
